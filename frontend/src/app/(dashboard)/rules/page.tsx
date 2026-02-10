@@ -84,12 +84,16 @@ export default function RulesPage() {
                 if (selectedStop) {
                     payload.routeId = selectedStop.routeId;
                 }
+                // Backend expects 'expectedMaxMinutes', frontend uses 'maxTimeMinutes'
+                payload.expectedMaxMinutes = formData.maxTimeMinutes;
             }
 
             // Map frontend naming to backend naming if needed (speed zones)
             if (activeTab === 'speed') {
                 payload.geofenceId = formData.traccarGeofenceId || formData.geofenceId;
             }
+
+            console.log('Sending Rule Payload:', payload); // Debug log
 
             if (editingRule) {
                 await api.put(`${endpoint}/${editingRule.id}`, payload);
