@@ -124,6 +124,42 @@ export class WebhookService {
             if (stop) console.log(`[Webhook] 🔗 Linked Geofence '${geofenceName}' to Stop '${stop.name}' by name match.`);
         }
 
+        // AUTO-CREACIÓN: Si no existe la parada y tenemos ID y Nombre, la creamos
+        if (!stop && geofenceId && geofenceName) {
+            console.log(`[Webhook] 🆕 New Geofence detected: ${geofenceName} (ID: ${geofenceId}). Auto-creating...`);
+
+            // 1. Buscar o crear ruta por defecto para importaciones
+            let defaultRoute = await prisma.route.findFirst({
+                where: { tenantId, name: 'Geocercas Importadas' }
+            });
+
+            if (!defaultRoute) {
+                defaultRoute = await prisma.route.create({
+                    data: {
+                        tenantId,
+                        name: 'Geocercas Importadas',
+                        description: 'Geocercas detectadas automáticamente desde Traccar'
+                    }
+                });
+            }
+
+            // 2. Crear la parada
+            try {
+                stop = await prisma.stop.create({
+                    data: {
+                        tenantId,
+                        routeId: defaultRoute.id,
+                        name: geofenceName,
+                        geofenceId: geofenceId,
+                        order: 0
+                    }
+                });
+                console.log(`[Webhook] ✅ Stop auto-created: ${stop.name} in route 'Geocercas Importadas'`);
+            } catch (error) {
+                console.error(`[Webhook] ❌ Error auto-creating stop:`, error);
+            }
+        }
+
         if (vehicle && stop) {
             console.log(`[Webhook] 🚌 Bus ${vehicle.plate} arrived at Stop ${stop.name}`);
             // Registrar llegada
