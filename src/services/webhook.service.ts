@@ -54,6 +54,29 @@ export class WebhookService {
             }
         } else {
             console.log(`[Webhook] ℹ️ Vehicle found: ${vehicle.plate}`);
+
+            // Auto-corrección: Si el vehículo tiene placa PENDING pero ahora viene info real, actualizamos
+            if (vehicle.plate.startsWith('PENDING-')) {
+                const deviceData = payload.device || {};
+                const newPlate = deviceData.plate_number || deviceData.name;
+                const newName = deviceData.name;
+
+                if (newPlate && newPlate !== vehicle.plate) {
+                    console.log(`[Webhook] 🔄 Updating PENDING vehicle ${vehicle.id} with real data: ${newPlate}`);
+                    try {
+                        vehicle = await prisma.vehicle.update({
+                            where: { id: vehicle.id },
+                            data: {
+                                plate: newPlate.substring(0, 20),
+                                internalCode: newName || vehicle.internalCode
+                            }
+                        });
+                        console.log(`[Webhook] ✅ Vehicle updated to: ${vehicle.plate}`);
+                    } catch (error) {
+                        console.error(`[Webhook] ❌ Error updating vehicle ${vehicle.id}:`, error);
+                    }
+                }
+            }
         }
 
         // 2. Procesar según tipo de evento
