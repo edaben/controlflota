@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import api from '../services/api';
-import { User, Plus, Shield, Mail } from 'lucide-react';
+'use client'
 
-const Users = () => {
+import React, { useEffect, useState } from 'react';
+import api from '@/lib/api';
+import { User, Plus, Shield } from 'lucide-react';
+
+export default function UsersPage() {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -89,6 +91,4 @@ const Users = () => {
             </div>
         </div>
     );
-};
-
-export default Users;
+}

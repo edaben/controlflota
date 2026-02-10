@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import api from '../services/api';
+'use client'
 
-const Login = () => {
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import api from '@/lib/api';
+
+export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const navigate = useNavigate();
+    const router = useRouter();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -18,7 +20,7 @@ const Login = () => {
             const { data } = await api.post('/auth/login', { email, password });
             localStorage.setItem('token', data.token);
             localStorage.setItem('user', JSON.stringify(data.user));
-            navigate('/');
+            router.push('/dashboard');
         } catch (err: any) {
             setError(err.response?.data?.error || 'Error al iniciar sesión');
         } finally {
@@ -76,6 +78,4 @@ const Login = () => {
             </div>
         </div>
     );
-};
-
-export default Login;
+}

@@ -1,7 +1,9 @@
+'use client'
+
 import React from 'react';
 import { TrendingUp, AlertTriangle, DollarSign, Mail } from 'lucide-react';
 
-const Dashboard = () => {
+export default function DashboardPage() {
     const stats = [
         { label: 'Multas Pendientes', value: '$1,250.00', icon: DollarSign, color: 'text-emerald-400', bg: 'bg-emerald-400/10' },
         { label: 'Infracciones Hoy', value: '12', icon: AlertTriangle, color: 'text-amber-400', bg: 'bg-amber-400/10' },
@@ -40,6 +42,4 @@ const Dashboard = () => {
             </div>
         </div>
     );
-};
-
-export default Dashboard;
+}

@@ -1,8 +1,10 @@
+'use client'
+
 import React, { useEffect, useState } from 'react';
-import api from '../services/api';
+import api from '@/lib/api';
 import { Building2, Plus, Search, ExternalLink } from 'lucide-react';
 
-const Tenants = () => {
+export default function TenantsPage() {
     const [tenants, setTenants] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -12,7 +14,7 @@ const Tenants = () => {
 
     const fetchTenants = async () => {
         try {
-            const { data } = await api.get('/tenants'); // Asumiendo que este endpoint existe para ADMIN
+            const { data } = await api.get('/tenants');
             setTenants(data);
         } catch (err) {
             console.error(err);
@@ -101,6 +103,4 @@ const Tenants = () => {
             </div>
         </div>
     );
-};
-
-export default Tenants;
+}

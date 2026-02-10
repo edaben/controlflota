@@ -1,16 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import api from '../services/api';
-import { Mail, Clock, Calendar, CheckCircle, AlertCircle, Download, Share2 } from 'lucide-react';
+'use client'
 
-const ConsolidatedReports = () => {
+import React, { useEffect, useState } from 'react';
+import api from '@/lib/api';
+import { Mail, Clock, Calendar, CheckCircle, Download, Share2 } from 'lucide-react';
+
+export default function ConsolidatedPage() {
     const [reports, setReports] = useState([]);
-    const [config, setConfig] = useState({
-        enabled: true,
-        frequency: 'DAILY',
-        sendTimeLocal: '23:59',
-        recipientsEmails: '',
-        includeStatus: 'CONFIRMED_ONLY'
-    });
 
     useEffect(() => {
         fetchData();
@@ -33,7 +28,6 @@ const ConsolidatedReports = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Configuración */}
                 <div className="lg:col-span-1 bg-slate-900 border border-slate-800 rounded-2xl p-6">
                     <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
                         <Clock size={20} className="text-primary-400" />
@@ -73,7 +67,6 @@ const ConsolidatedReports = () => {
                     </div>
                 </div>
 
-                {/* Historial */}
                 <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6">
                     <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
                         <Calendar size={20} className="text-emerald-400" />
@@ -127,6 +120,4 @@ const ConsolidatedReports = () => {
             </div>
         </div>
     );
-};
-
-export default ConsolidatedReports;
+}

@@ -3,26 +3,54 @@ version: '3.8'
 services:
   db:
     image: postgres:15-alpine
-    restart: always
+    container_name: control-bus-db
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-control_bus}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: control_bus
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - control-bus-network
 
   backend:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: control-bus-backend
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-control_bus}?schema=public
-      JWT_SECRET: ${JWT_SECRET:-supersecret}
-      NODE_ENV: development
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/control_bus
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      PORT: 3000
     depends_on:
       - db
+    networks:
+      - control-bus-network
+    volumes:
+      - ./src:/app/src
+      - ./prisma:/app/prisma
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: control-bus-frontend
+    ports:
+      - "3001:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3000/api
+    depends_on:
+      - backend
+    networks:
+      - control-bus-network
 
 volumes:
   postgres_data:
+
+networks:
+  control-bus-network:
+    driver: bridge

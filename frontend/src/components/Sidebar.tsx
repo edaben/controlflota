@@ -1,12 +1,14 @@
+'use client'
+
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import {
     LayoutDashboard,
     AlertTriangle,
     FileText,
     Settings,
     Truck,
-    Route,
     LogOut,
     Mail,
     User,
@@ -14,16 +16,24 @@ import {
 } from 'lucide-react';
 
 const Sidebar = () => {
+    const pathname = usePathname();
+    const router = useRouter();
+
     const navItems = [
-        { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-        { to: '/tenants', icon: Building2, label: 'Clientes' },
-        { to: '/users', icon: User, label: 'Usuarios' },
-        { to: '/infractions', icon: AlertTriangle, label: 'Infracciones' },
-        { to: '/fines', icon: FileText, label: 'Multas' },
-        { to: '/consolidated', icon: Mail, label: 'Consolidados' },
-        { to: '/vehicles', icon: Truck, label: 'Vehículos' },
-        { to: '/rules', icon: Settings, label: 'Reglas' },
+        { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+        { href: '/tenants', icon: Building2, label: 'Clientes' },
+        { href: '/users', icon: User, label: 'Usuarios' },
+        { href: '/infractions', icon: AlertTriangle, label: 'Infracciones' },
+        { href: '/fines', icon: FileText, label: 'Multas' },
+        { href: '/consolidated', icon: Mail, label: 'Consolidados' },
+        { href: '/vehicles', icon: Truck, label: 'Vehículos' },
+        { href: '/rules', icon: Settings, label: 'Reglas' },
     ];
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        router.push('/login');
+    };
 
     return (
         <aside className="w-64 bg-slate-900 text-white min-h-screen flex flex-col border-r border-slate-800">
@@ -34,29 +44,27 @@ const Sidebar = () => {
             </div>
 
             <nav className="flex-1 px-4 space-y-2">
-                {navItems.map((item) => (
-                    <NavLink
-                        key={item.to}
-                        to={item.to}
-                        className={({ isActive }) =>
-                            `flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${isActive
-                                ? 'bg-primary-600 text-white shadow-lg shadow-primary-900/40'
-                                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                            }`
-                        }
-                    >
-                        <item.icon size={20} />
-                        <span className="font-medium">{item.label}</span>
-                    </NavLink>
-                ))}
+                {navItems.map((item) => {
+                    const isActive = pathname === item.href;
+                    return (
+                        <Link
+                            key={item.href}
+                            href={item.href}
+                            className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${isActive
+                                    ? 'bg-primary-600 text-white shadow-lg shadow-primary-900/40'
+                                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                                }`}
+                        >
+                            <item.icon size={20} />
+                            <span className="font-medium">{item.label}</span>
+                        </Link>
+                    );
+                })}
             </nav>
 
             <div className="p-4 border-t border-slate-800">
                 <button
-                    onClick={() => {
-                        localStorage.removeItem('token');
-                        window.location.href = '/login';
-                    }}
+                    onClick={handleLogout}
                     className="flex items-center space-x-3 px-4 py-3 w-full text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
                 >
                     <LogOut size={20} />
