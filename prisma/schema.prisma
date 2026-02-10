@@ -130,6 +130,7 @@ model SegmentRule {
   expectedMinMinutes Int?
   expectedMaxMinutes Int
   fineAmountUsd      Decimal  @db.Decimal(10, 2)
+  penaltyPerMinuteUsd Decimal @default(0) @db.Decimal(10, 2) // Nueva regla: Multa por minuto extra
   active             Boolean  @default(true)
 
   tenant   Tenant @relation(fields: [tenantId], references: [id])
@@ -144,8 +145,10 @@ model StopRule {
   id             String   @id @default(uuid())
   tenantId       String
   stopId         String
-  maxDwellMinutes Int
+  minDwellTimeMinutes Int?     // OPCIONAL: Tiempo minimo
+  maxDwellMinutes Int          // Tiempo maximo permitido
   fineAmountUsd  Decimal  @db.Decimal(10, 2)
+  penaltyPerMinuteUsd Decimal @default(0) @db.Decimal(10, 2) // Nueva regla: Multa por minuto extra
   active         Boolean  @default(true)
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
@@ -162,6 +165,7 @@ model SpeedZone {
   geofenceId    String?
   maxSpeedKmh   Int
   fineAmountUsd Decimal  @db.Decimal(10, 2)
+  penaltyPerKmhUsd Decimal @default(0) @db.Decimal(10, 2) // Nueva regla: Multa por km/h extra
   active        Boolean  @default(true)
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
