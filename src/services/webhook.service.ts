@@ -115,6 +115,7 @@ export class WebhookService {
             if (!vehicle) console.log(`[Webhook] ⚠️ Vehicle not found for ID ${deviceId}`);
             if (!stop) console.log(`[Webhook] ⚠️ No Stop configured for Geofence '${geofenceName}' (ID: ${geofenceId}). Go to Rules > Stops to link it.`);
         }
+    }
 
     private static async handleGeofenceExit(tenantId: string, deviceId: string, payload: any) {
         const geofenceId = (payload.geofenceId || payload.geofence_id)?.toString();
