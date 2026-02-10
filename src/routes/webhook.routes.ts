@@ -7,14 +7,14 @@ const prisma = new PrismaClient();
 
 router.post('/traccar', async (req: Request, res: Response) => {
     // Log para depuración
-    console.log('--- Incoming Webhook Request ---');
-    console.log('Headers:', req.headers);
-    console.log('Body:', JSON.stringify(req.body, null, 2));
+    console.log('[Webhook] --- Incoming Webhook Request ---');
+    console.log('[Webhook] Headers:', JSON.stringify(req.headers));
+    console.log('[Webhook] Body:', JSON.stringify(req.body));
 
-    const apiKey = req.headers['x-api-key']?.toString();
+    const apiKey = (req.headers['x-api-key'] || req.query.apiKey)?.toString();
 
     if (!apiKey) {
-        console.log('Error: API Key is missing');
+        console.log('[Webhook] ❌ Error: API Key is missing in headers or query');
         return res.status(401).json({ error: 'API Key is required' });
     }
 
@@ -23,21 +23,31 @@ router.post('/traccar', async (req: Request, res: Response) => {
             where: { apiKey }
         });
 
-        if (!tenant || !tenant.active) {
-            return res.status(401).json({ error: 'Invalid or inactive tenant' });
+        if (!tenant) {
+            console.log(`[Webhook] ❌ Error: Tenant not found for apiKey: ${apiKey}`);
+            return res.status(401).json({ error: 'Invalid tenant' });
+        }
+
+        if (!tenant.active) {
+            console.log(`[Webhook] ❌ Error: Tenant ${tenant.name} is inactive`);
+            return res.status(401).json({ error: 'Inactive tenant' });
         }
 
         const { deviceId, type, ...payload } = req.body;
 
         if (!deviceId || !type) {
+            console.log('[Webhook] ❌ Error: deviceId or type missing in body');
             return res.status(400).json({ error: 'deviceId and type are required' });
         }
+
+        console.log(`[Webhook] ✅ Valid request for tenant ${tenant.name}. Processing event: ${type} for device: ${deviceId}`);
 
         // Procesar asíncronamente para no bloquear el webhook
         WebhookService.processEvent(tenant.id, deviceId, type, req.body);
 
         res.status(202).json({ message: 'Event received and processing started' });
     } catch (error) {
+        console.error('[Webhook] ❌ Internal Server Error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

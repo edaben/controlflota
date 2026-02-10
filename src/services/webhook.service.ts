@@ -14,6 +14,38 @@ export class WebhookService {
             }
         });
 
+        // 1.5 Verificar si el vehículo existe, si no, crearlo automáticamente
+        const traccarId = parseInt(deviceId);
+        console.log(`[Webhook] Processing deviceId: ${deviceId} (Parsed: ${traccarId})`);
+
+        if (isNaN(traccarId)) {
+            console.error(`[Webhook] Error: deviceId '${deviceId}' is not a valid number.`);
+            return;
+        }
+
+        let vehicle = await prisma.vehicle.findUnique({
+            where: { traccarDeviceId: traccarId }
+        });
+
+        if (!vehicle) {
+            console.log(`[Webhook] ⚠️ Vehicle with traccarDeviceId ${traccarId} not found. Creating new vehicle...`);
+            try {
+                vehicle = await prisma.vehicle.create({
+                    data: {
+                        tenantId,
+                        plate: `PENDING-${traccarId}`, // Placa temporal
+                        traccarDeviceId: traccarId,
+                        internalCode: `AUTO-${traccarId}`
+                    }
+                });
+                console.log(`[Webhook] ✅ Created new vehicle: ${vehicle.plate} (ID: ${vehicle.id})`);
+            } catch (error) {
+                console.error(`[Webhook] ❌ Error creating auto-vehicle ${traccarId}:`, error);
+            }
+        } else {
+            console.log(`[Webhook] ℹ️ Vehicle found: ${vehicle.plate}`);
+        }
+
         // 2. Procesar según tipo de evento
         try {
             if (eventType === 'geofenceEnter') {

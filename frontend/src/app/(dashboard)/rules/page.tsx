@@ -170,6 +170,7 @@ export default function RulesPage() {
                                             </div>
                                             <div className="text-sm text-slate-400">
                                                 Tiempo Máximo: {rule.maxTimeMinutes} minutos
+                                                <span className="ml-2 text-emerald-400">• Multa: ${Number(rule.fineAmountUsd).toFixed(2)}</span>
                                             </div>
                                         </div>
                                         <div className="flex gap-2">
@@ -215,6 +216,7 @@ export default function RulesPage() {
                                             <div className="text-white font-medium">Parada: {rule.stop?.name}</div>
                                             <div className="text-sm text-slate-400">
                                                 Dwell Time: {rule.minDwellTimeMinutes}-{rule.maxDwellTimeMinutes} min
+                                                <span className="ml-2 text-emerald-400">• Multa: ${Number(rule.fineAmountUsd).toFixed(2)}</span>
                                             </div>
                                         </div>
                                         <div className="flex gap-2">
@@ -257,8 +259,11 @@ export default function RulesPage() {
                                 {speedZones.map((zone: any) => (
                                     <div key={zone.id} className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 flex justify-between items-center">
                                         <div>
-                                            <div className="text-white font-medium">{zone.name} (Geofence: {zone.traccarGeofenceId})</div>
-                                            <div className="text-sm text-slate-400">Límite: {zone.maxSpeedKmH} km/h</div>
+                                            <div className="text-white font-medium">{zone.name} (Geofence: {zone.geofenceId})</div>
+                                            <div className="text-sm text-slate-400">
+                                                Límite: {zone.maxSpeedKmh} km/h
+                                                <span className="ml-2 text-emerald-400">• Multa: ${Number(zone.fineAmountUsd).toFixed(2)}</span>
+                                            </div>
                                         </div>
                                         <div className="flex gap-2">
                                             <button onClick={() => handleOpenModal(zone)} className="p-2 text-slate-400 hover:text-primary-400 transition-colors">
@@ -327,6 +332,21 @@ export default function RulesPage() {
                                     required
                                 />
                             </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">Valor Multa (USD)</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-3 text-slate-400">$</span>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full pl-8 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
+                                        value={formData.fineAmountUsd}
+                                        onChange={(e) => setFormData({ ...formData, fineAmountUsd: parseFloat(e.target.value) })}
+                                        placeholder="0.00"
+                                        required
+                                    />
+                                </div>
+                            </div>
                         </>
                     )}
 
@@ -364,6 +384,21 @@ export default function RulesPage() {
                                     />
                                 </div>
                             </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">Valor Multa (USD)</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-3 text-slate-400">$</span>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full pl-8 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
+                                        value={formData.fineAmountUsd}
+                                        onChange={(e) => setFormData({ ...formData, fineAmountUsd: parseFloat(e.target.value) })}
+                                        placeholder="0.00"
+                                        required
+                                    />
+                                </div>
+                            </div>
                         </>
                     )}
 
@@ -381,12 +416,24 @@ export default function RulesPage() {
                                 />
                             </div>
                             <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">Ruta Asociada</label>
+                                <select
+                                    className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
+                                    value={formData.routeId}
+                                    onChange={(e) => setFormData({ ...formData, routeId: e.target.value })}
+                                    required
+                                >
+                                    <option value="">Seleccionar Ruta...</option>
+                                    {routes.map((r: any) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                                </select>
+                            </div>
+                            <div>
                                 <label className="block text-sm font-medium text-slate-300 mb-2">ID Geofence (Traccar)</label>
                                 <input
                                     type="text"
                                     className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
-                                    value={formData.traccarGeofenceId}
-                                    onChange={(e) => setFormData({ ...formData, traccarGeofenceId: e.target.value })}
+                                    value={formData.geofenceId}
+                                    onChange={(e) => setFormData({ ...formData, geofenceId: e.target.value })}
                                     placeholder="ID de geocerca en Traccar"
                                     required
                                 />
@@ -396,10 +443,25 @@ export default function RulesPage() {
                                 <input
                                     type="number"
                                     className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
-                                    value={formData.maxSpeedKmH}
-                                    onChange={(e) => setFormData({ ...formData, maxSpeedKmH: parseInt(e.target.value) })}
+                                    value={formData.maxSpeedKmh}
+                                    onChange={(e) => setFormData({ ...formData, maxSpeedKmh: parseInt(e.target.value) })}
                                     required
                                 />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">Valor Multa (USD)</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-3 text-slate-400">$</span>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full pl-8 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
+                                        value={formData.fineAmountUsd}
+                                        onChange={(e) => setFormData({ ...formData, fineAmountUsd: parseFloat(e.target.value) })}
+                                        placeholder="0.00"
+                                        required
+                                    />
+                                </div>
                             </div>
                         </>
                     )}
