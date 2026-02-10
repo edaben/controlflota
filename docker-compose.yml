@@ -21,7 +21,7 @@ services:
       dockerfile: Dockerfile
     container_name: control-bus-backend
     ports:
-      - "3000:3000"
+      - "4000:3000"
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/control_bus
       JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
@@ -40,9 +40,9 @@ services:
       dockerfile: Dockerfile
     container_name: control-bus-frontend
     ports:
-      - "3001:3000"
+      - "4001:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:3000/api
+      NEXT_PUBLIC_API_URL: ${API_URL:-http://localhost:3000/api}
     depends_on:
       - backend
     networks:
