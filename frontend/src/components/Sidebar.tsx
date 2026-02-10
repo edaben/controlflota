@@ -1,5 +1,3 @@
-'use client'
-
 import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -12,7 +10,8 @@ import {
     LogOut,
     Mail,
     User,
-    Building2
+    Building2,
+    Webhook
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -28,6 +27,7 @@ const Sidebar = () => {
         { href: '/consolidated', icon: Mail, label: 'Consolidados' },
         { href: '/vehicles', icon: Truck, label: 'Vehículos' },
         { href: '/rules', icon: Settings, label: 'Reglas' },
+        { href: '/settings/webhook', icon: Webhook, label: 'Webhook' },
     ];
 
     const handleLogout = () => {
@@ -51,8 +51,8 @@ const Sidebar = () => {
                             key={item.href}
                             href={item.href}
                             className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${isActive
-                                    ? 'bg-primary-600 text-white shadow-lg shadow-primary-900/40'
-                                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                                ? 'bg-primary-600 text-white shadow-lg shadow-primary-900/40'
+                                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                                 }`}
                         >
                             <item.icon size={20} />

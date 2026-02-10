@@ -9,17 +9,18 @@ router.post('/login', async (req: Request, res: Response) => {
     const { email, password } = req.body;
 
     try {
+        console.log('🔐 Login attempt for:', email);
+
         const user = await prisma.user.findUnique({
             where: { email },
             include: { tenant: true }
         });
 
-        if (!user || !(await comparePassword(password, user.password))) {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
+        console.log('👤 User found:', user ? 'YES' : 'NO');
 
-        if (!user.active) {
-            return res.status(401).json({ error: 'User account is disabled' });
+        if (!user || !(await comparePassword(password, user.password))) {
+            console.log('❌ Invalid credentials');
+            return res.status(401).json({ error: 'Invalid credentials' });
         }
 
         const token = generateToken({
@@ -28,6 +29,8 @@ router.post('/login', async (req: Request, res: Response) => {
             role: user.role,
             tenantId: user.tenantId
         });
+
+        console.log('✅ Login successful for:', email);
 
         res.json({
             token,
@@ -40,6 +43,7 @@ router.post('/login', async (req: Request, res: Response) => {
             }
         });
     } catch (error) {
+        console.error('💥 Login error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

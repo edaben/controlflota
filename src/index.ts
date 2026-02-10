@@ -20,10 +20,10 @@ app.use(express.json());
 
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/entities', entityRoutes);
-app.use('/api/rules', ruleRoutes);
-app.use('/api/reports', reportRoutes);
-app.use('/webhook', webhookRoutes);
+app.use('/api/webhook', webhookRoutes); // Mover antes para evitar interferencia de middleware en /api
+app.use('/api', entityRoutes);
+app.use('/api', ruleRoutes);
+app.use('/api', reportRoutes);
 
 // Initialize Scheduler
 SchedulerService.init();

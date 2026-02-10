@@ -12,11 +12,18 @@ model Tenant {
   name            String
   slug            String   @unique
   apiKey          String   @unique @default(cuid())
-  smtpConfig      Json?    // { host, port, user, pass, secure, fromName, fromEmail }
-  timezone        String   @default("America/Guayaquil")
   active          Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  // SMTP Configuration
+  smtpHost        String?
+  smtpPort        Int?     @default(587)
+  smtpUser        String?
+  smtpPassword    String?
+  smtpFromEmail   String?
+  smtpFromName    String?
+  smtpSecure      Boolean  @default(false)
 
   users                User[]
   vehicles             Vehicle[]
@@ -36,6 +43,7 @@ model Tenant {
   @@map("tenants")
 }
 
+
 enum Role {
   SUPER_ADMIN
   CLIENT_ADMIN
@@ -48,7 +56,6 @@ model User {
   password  String
   role      Role     @default(CLIENT_USER)
   tenantId  String?
-  active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -60,10 +67,9 @@ model User {
 model Vehicle {
   id               String   @id @default(uuid())
   tenantId         String
-  plateNumber      String
-  traccarDeviceId  String?  @unique
-  fleetId          String?
-  active           Boolean  @default(true)
+  plate            String
+  traccarDeviceId  Int?     @unique  // Changed from String? to Int? to match database
+  internalCode     String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -71,7 +77,7 @@ model Vehicle {
   stopArrivals     StopArrival[]
   infractions      Infraction[]
 
-  @@unique([tenantId, plateNumber])
+  @@unique([tenantId, plate])
   @@map("vehicles")
 }
 
