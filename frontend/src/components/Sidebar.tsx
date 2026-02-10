@@ -11,7 +11,8 @@ import {
     Mail,
     User,
     Building2,
-    Webhook
+    Webhook,
+    MapPin
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -26,6 +27,7 @@ const Sidebar = () => {
         { href: '/fines', icon: FileText, label: 'Multas' },
         { href: '/consolidated', icon: Mail, label: 'Consolidados' },
         { href: '/vehicles', icon: Truck, label: 'Vehículos' },
+        { href: '/routes', icon: MapPin, label: 'Rutas y Paradas' }, // Added new navigation item
         { href: '/rules', icon: Settings, label: 'Reglas' },
         { href: '/settings/webhook', icon: Webhook, label: 'Webhook' },
     ];
