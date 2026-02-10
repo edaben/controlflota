@@ -45,7 +45,7 @@ export class ConsolidatedService {
         });
 
         // 4. Enviar Email si hay configuración
-        const schedule = await prisma.reportSchedules.findUnique({ where: { tenantId } });
+        const schedule = await prisma.reportSchedule.findUnique({ where: { tenantId } });
         if (schedule && schedule.enabled && schedule.recipientsEmails.length > 0) {
             try {
                 await ReportingService.sendEmail(

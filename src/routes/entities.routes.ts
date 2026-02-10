@@ -106,7 +106,7 @@ router.get('/users', async (req: AuthRequest, res: Response) => {
                 updatedAt: true,
                 tenant: { select: { name: true } }
             }
-        });
+        } as any);
         res.json(users);
     } catch (error) {
         res.status(500).json({ error: 'Could not fetch users' });
@@ -293,7 +293,7 @@ router.get('/infractions', async (req: AuthRequest, res: Response) => {
         const infractions = await prisma.infraction.findMany({
             where,
             include: { vehicle: true },
-            orderBy: { timestamp: 'desc' }
+            orderBy: { timestamp: 'desc' } as any
         });
         res.json(infractions);
     } catch (error) {

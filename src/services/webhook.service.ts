@@ -39,7 +39,7 @@ export class WebhookService {
         if (!geofenceId) return;
 
         // Buscar vehículo y parada
-        const vehicle = await prisma.vehicle.findUnique({ where: { traccarDeviceId: deviceId } });
+        const vehicle = await prisma.vehicle.findUnique({ where: { traccarDeviceId: parseInt(deviceId) } });
         const stop = await prisma.stop.findFirst({ where: { tenantId, geofenceId } });
 
         if (vehicle && stop) {
@@ -62,7 +62,7 @@ export class WebhookService {
         const geofenceId = payload.geofenceId?.toString();
         if (!geofenceId) return;
 
-        const vehicle = await prisma.vehicle.findUnique({ where: { traccarDeviceId: deviceId } });
+        const vehicle = await prisma.vehicle.findUnique({ where: { traccarDeviceId: parseInt(deviceId) } });
         const stop = await prisma.stop.findFirst({ where: { tenantId, geofenceId } });
 
         if (vehicle && stop) {
@@ -92,7 +92,7 @@ export class WebhookService {
     }
 
     private static async handleOverspeed(tenantId: string, deviceId: string, payload: any) {
-        const vehicle = await prisma.vehicle.findUnique({ where: { traccarDeviceId: deviceId } });
+        const vehicle = await prisma.vehicle.findUnique({ where: { traccarDeviceId: parseInt(deviceId) } });
         if (vehicle) {
             // Disparar detección de velocidad
             // await InfractionService.detectOverspeedInfraction(tenantId, vehicle.id, payload);

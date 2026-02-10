@@ -21,7 +21,7 @@ export class SchedulerService {
         const currentHour = now.getHours();
         const currentMinute = now.getMinutes();
 
-        const activeSchedules = await prisma.reportSchedules.findMany({
+        const activeSchedules = await prisma.reportSchedule.findMany({
             where: { enabled: true }
         });
 

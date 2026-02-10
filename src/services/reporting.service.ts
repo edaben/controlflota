@@ -41,12 +41,12 @@ export class ReportingService {
         doc.moveDown();
 
         // Detalle
-        doc.text(`Vehículo: ${fine.infraction.vehicle.plateNumber}`);
+        doc.text(`Vehículo: ${fine.infraction.vehicle.plate}`);
         doc.text(`Tipo: ${fine.infraction.type}`);
         doc.text(`Monto: $${fine.amountUsd.toFixed(2)} USD`);
         doc.moveDown();
 
-        doc.fontSize(10).text('Este es un comprobante automático generado por el sistema de Control Bus.', { align: 'center', color: 'gray' });
+        doc.fontSize(10).fillColor('gray').text('Este es un comprobante automático generado por el sistema de Control Bus.', { align: 'center' });
 
         doc.end();
 
@@ -105,7 +105,7 @@ export class ReportingService {
 
     static async sendEmail(tenantId: string, to: string[], subject: string, html: string, attachments: any[] = []) {
         const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
-        const smtp = (tenant?.smtpConfig as any) || {
+        const smtp = (tenant as any) || {
             host: process.env.SMTP_HOST,
             port: process.env.SMTP_PORT,
             user: process.env.SMTP_USER,
