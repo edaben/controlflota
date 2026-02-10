@@ -293,7 +293,7 @@ router.get('/infractions', async (req: AuthRequest, res: Response) => {
         const infractions = await prisma.infraction.findMany({
             where,
             include: { vehicle: true },
-            orderBy: { timestamp: 'desc' } as any
+            orderBy: { detectedAt: 'desc' }
         });
         res.json(infractions);
     } catch (error) {
