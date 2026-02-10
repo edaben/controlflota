@@ -1,0 +1,47 @@
+import express, { Request, Response } from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import { PrismaClient } from '@prisma/client';
+import authRoutes from './routes/auth.routes';
+import webhookRoutes from './routes/webhook.routes';
+import entityRoutes from './routes/entities.routes';
+import ruleRoutes from './routes/rules.routes';
+import reportRoutes from './routes/reports.routes';
+import { SchedulerService } from './services/scheduler.service';
+
+dotenv.config();
+
+const app = express();
+const prisma = new PrismaClient();
+const port = process.env.PORT || 3000;
+
+app.use(cors());
+app.use(express.json());
+
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/entities', entityRoutes);
+app.use('/api/rules', ruleRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/webhook', webhookRoutes);
+
+// Initialize Scheduler
+SchedulerService.init();
+
+// Basic health check
+app.get('/health', (req: Request, res: Response) => {
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        service: 'Control Bus API'
+    });
+});
+
+app.listen(port, () => {
+    console.log(`🚀 Server running on http://localhost:${port}`);
+});
+
+process.on('SIGTERM', async () => {
+    await prisma.$disconnect();
+    process.exit(0);
+});

@@ -1,0 +1,338 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id              String   @id @default(uuid())
+  name            String
+  slug            String   @unique
+  apiKey          String   @unique @default(cuid())
+  smtpConfig      Json?    // { host, port, user, pass, secure, fromName, fromEmail }
+  timezone        String   @default("America/Guayaquil")
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  users                User[]
+  vehicles             Vehicle[]
+  routes               Route[]
+  stops                Stop[]
+  segmentRules         SegmentRule[]
+  stopRules            StopRule[]
+  speedZones           SpeedZone[]
+  gpsEvents            GpsEvent[]
+  stopArrivals         StopArrival[]
+  infractions          Infraction[]
+  fines                Fine[]
+  reportSchedules      ReportSchedule?
+  consolidatedReports  ConsolidatedReport[]
+  emailLogs            EmailLog[]
+
+  @@map("tenants")
+}
+
+enum Role {
+  SUPER_ADMIN
+  CLIENT_ADMIN
+  CLIENT_USER
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  role      Role     @default(CLIENT_USER)
+  tenantId  String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+
+  @@map("users")
+}
+
+model Vehicle {
+  id               String   @id @default(uuid())
+  tenantId         String
+  plateNumber      String
+  traccarDeviceId  String?  @unique
+  fleetId          String?
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  tenant           Tenant   @relation(fields: [tenantId], references: [id])
+  stopArrivals     StopArrival[]
+  infractions      Infraction[]
+
+  @@unique([tenantId, plateNumber])
+  @@map("vehicles")
+}
+
+model Route {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  code        String?
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  stops        Stop[]
+  segmentRules SegmentRule[]
+  speedZones   SpeedZone[]
+
+  @@map("routes")
+}
+
+model Stop {
+  id          String   @id @default(uuid())
+  tenantId    String
+  routeId     String
+  name        String
+  geofenceId  String?  // ID de la geocerca en Traccar
+  latitude    Float?
+  longitude   Float?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  route        Route         @relation(fields: [routeId], references: [id])
+  stopArrivals StopArrival[]
+  rules        StopRule[]
+  segmentFrom  SegmentRule[] @relation("FromStop")
+  segmentTo    SegmentRule[] @relation("ToStop")
+
+  @@map("stops")
+}
+
+model SegmentRule {
+  id                 String   @id @default(uuid())
+  tenantId           String
+  routeId            String
+  fromStopId         String
+  toStopId           String
+  expectedMinMinutes Int?
+  expectedMaxMinutes Int
+  fineAmountUsd      Decimal  @db.Decimal(10, 2)
+  active             Boolean  @default(true)
+
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  route    Route  @relation(fields: [routeId], references: [id])
+  fromStop Stop   @relation("FromStop", fields: [fromStopId], references: [id])
+  toStop   Stop   @relation("ToStop", fields: [toStopId], references: [id])
+
+  @@map("segment_rules")
+}
+
+model StopRule {
+  id             String   @id @default(uuid())
+  tenantId       String
+  stopId         String
+  maxDwellMinutes Int
+  fineAmountUsd  Decimal  @db.Decimal(10, 2)
+  active         Boolean  @default(true)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  stop   Stop   @relation(fields: [stopId], references: [id])
+
+  @@map("stop_rules")
+}
+
+model SpeedZone {
+  id            String   @id @default(uuid())
+  tenantId      String
+  routeId       String
+  name          String
+  geofenceId    String?
+  maxSpeedKmh   Int
+  fineAmountUsd Decimal  @db.Decimal(10, 2)
+  active        Boolean  @default(true)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  route  Route  @relation(fields: [routeId], references: [id])
+
+  @@map("speed_zones")
+}
+
+model GpsEvent {
+  id          String   @id @default(uuid())
+  tenantId    String
+  deviceId    String
+  eventType   String
+  rawPayload  Json
+  processedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("gps_events")
+}
+
+model StopArrival {
+  id           String    @id @default(uuid())
+  tenantId     String
+  vehicleId    String
+  stopId       String
+  arrivedAt    DateTime
+  departedAt   DateTime?
+  dwellMinutes Int?
+  createdAt    DateTime  @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id])
+  stop    Stop    @relation(fields: [stopId], references: [id])
+
+  @@map("stop_arrivals")
+}
+
+enum InfractionType {
+  TIME_SEGMENT
+  DWELL_TIME
+  OVERSPEED
+}
+
+enum InfractionStatus {
+  PENDING
+  CONFIRMED
+  DISMISSED
+}
+
+model Infraction {
+  id         String           @id @default(uuid())
+  tenantId   String
+  vehicleId  String
+  type       InfractionType
+  detectedAt DateTime
+  confirmedAt DateTime?
+  status     InfractionStatus @default(PENDING)
+  details    Json?            // Detalles técnicos de la infracción
+  createdAt  DateTime         @default(now())
+
+  tenant  Tenant @relation(fields: [tenantId], references: [id])
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id])
+  fine    Fine?
+
+  @@map("infractions")
+}
+
+model Fine {
+  id           String   @id @default(uuid())
+  tenantId     String
+  infractionId String   @unique
+  amountUsd    Decimal  @db.Decimal(10, 2)
+  status       String   @default("UNPAID")
+  createdAt    DateTime @default(now())
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id])
+  infraction Infraction @relation(fields: [infractionId], references: [id])
+  ticket     Ticket?
+
+  @@map("fines")
+}
+
+model Ticket {
+  id         String   @id @default(uuid())
+  tenantId   String
+  fineId     String   @unique
+  shareToken String   @unique @default(cuid())
+  pdfPath    String?
+  createdAt  DateTime @default(now())
+
+  fine Fine @relation(fields: [fineId], references: [id])
+
+  @@map("tickets")
+}
+
+enum Frequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  EVERY_N_DAYS
+  EVERY_24_HOURS
+}
+
+enum IncludeStatus {
+  CONFIRMED_ONLY
+  PENDING_AND_CONFIRMED
+}
+
+model ReportSchedule {
+  id              String        @id @default(uuid())
+  tenantId        String        @unique
+  enabled         Boolean       @default(false)
+  frequency       Frequency     @default(DAILY)
+  everyNDays      Int?
+  sendTimeLocal   String        @default("23:59")
+  timezone        String        @default("America/Guayaquil")
+  includeStatus   IncludeStatus @default(CONFIRMED_ONLY)
+  recipientsEmails String[]     // PostgreSQL array de emails
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("report_schedules")
+}
+
+enum ReportStatus {
+  GENERATED
+  SENT
+  ERROR
+}
+
+model ConsolidatedReport {
+  id          String       @id @default(uuid())
+  tenantId    String
+  periodStart DateTime
+  periodEnd   DateTime
+  totalUsd    Decimal      @db.Decimal(10, 2)
+  currency    String       @default("USD")
+  pdfPath     String?
+  shareToken  String       @unique @default(cuid())
+  status      ReportStatus @default(GENERATED)
+  sentAt      DateTime?
+  createdAt   DateTime     @default(now())
+
+  tenant Tenant                 @relation(fields: [tenantId], references: [id])
+  items  ConsolidatedReportItem[]
+  emailLogs EmailLog[]
+
+  @@map("consolidated_reports")
+}
+
+model ConsolidatedReportItem {
+  id                   String @id @default(uuid())
+  consolidatedReportId String
+  vehicleId            String
+  infractionId         String
+  fineId               String
+  amountUsd            Decimal @db.Decimal(10, 2)
+
+  report ConsolidatedReport @relation(fields: [consolidatedReportId], references: [id])
+
+  @@map("consolidated_report_items")
+}
+
+model EmailLog {
+  id                   String   @id @default(uuid())
+  tenantId             String
+  toEmail              String
+  subject              String
+  status               String   // SENT, ERROR
+  errorMessage         String?
+  relatedReportId      String?
+  relatedTicketId      String?
+  sentAt               DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  report ConsolidatedReport? @relation(fields: [relatedReportId], references: [id])
+
+  @@map("email_logs")
+}
