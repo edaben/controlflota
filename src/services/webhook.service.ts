@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { InfractionService } from './infraction.service';
 
 const prisma = new PrismaClient();
 
@@ -168,7 +169,7 @@ export class WebhookService {
                 });
 
                 // Disparar detección de dwell time (exceso en parada)
-                // await InfractionService.detectDwellTimeInfraction(tenantId, vehicle.id, stop.id, dwellMinutes);
+                await InfractionService.detectDwellTimeInfraction(tenantId, vehicle.id, stop.id, dwellMinutes);
             }
         }
     }
@@ -177,7 +178,7 @@ export class WebhookService {
         const vehicle = await prisma.vehicle.findUnique({ where: { traccarDeviceId: parseInt(deviceId) } });
         if (vehicle) {
             // Disparar detección de velocidad
-            // await InfractionService.detectOverspeedInfraction(tenantId, vehicle.id, payload);
+            await InfractionService.detectOverspeedInfraction(tenantId, vehicle.id, payload);
         }
     }
 }
