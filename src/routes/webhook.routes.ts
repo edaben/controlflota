@@ -33,12 +33,22 @@ router.post('/traccar', async (req: Request, res: Response) => {
             return res.status(401).json({ error: 'Inactive tenant' });
         }
 
-        const { deviceId, type, ...payload } = req.body;
+        let { deviceId, type, ...payload } = req.body;
+
+        // Normalizar deviceId (Traccar envía snake_case)
+        if (!deviceId && req.body.device_id) {
+            deviceId = req.body.device_id;
+        }
 
         if (!deviceId || !type) {
             console.log('[Webhook] ❌ Error: deviceId or type missing in body');
             return res.status(400).json({ error: 'deviceId and type are required' });
         }
+
+        // Mappear tipos de eventos de Traccar a los internos
+        if (type === 'zone_in') type = 'geofenceEnter';
+        if (type === 'zone_out') type = 'geofenceExit';
+        // type === 'deviceOverspeed' suele ser igual, pero si llega distinto se puede añadir aquí
 
         console.log(`[Webhook] ✅ Valid request for tenant ${tenant.name}. Processing event: ${type} for device: ${deviceId}`);
 

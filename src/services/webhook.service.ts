@@ -67,7 +67,7 @@ export class WebhookService {
     }
 
     private static async handleGeofenceEnter(tenantId: string, deviceId: string, payload: any) {
-        const geofenceId = payload.geofenceId?.toString();
+        const geofenceId = (payload.geofenceId || payload.geofence_id)?.toString();
         if (!geofenceId) return;
 
         // Buscar vehículo y parada
@@ -81,7 +81,7 @@ export class WebhookService {
                     tenantId,
                     vehicleId: vehicle.id,
                     stopId: stop.id,
-                    arrivedAt: new Date(payload.serverTime || new Date())
+                    arrivedAt: new Date(payload.serverTime || payload.time || new Date())
                 }
             });
 
@@ -91,7 +91,7 @@ export class WebhookService {
     }
 
     private static async handleGeofenceExit(tenantId: string, deviceId: string, payload: any) {
-        const geofenceId = payload.geofenceId?.toString();
+        const geofenceId = (payload.geofenceId || payload.geofence_id)?.toString();
         if (!geofenceId) return;
 
         const vehicle = await prisma.vehicle.findUnique({ where: { traccarDeviceId: parseInt(deviceId) } });
@@ -109,7 +109,7 @@ export class WebhookService {
             });
 
             if (lastArrival) {
-                const departedAt = new Date(payload.serverTime || new Date());
+                const departedAt = new Date(payload.serverTime || payload.time || new Date());
                 const dwellMinutes = Math.round((departedAt.getTime() - lastArrival.arrivedAt.getTime()) / 60000);
 
                 await prisma.stopArrival.update({
