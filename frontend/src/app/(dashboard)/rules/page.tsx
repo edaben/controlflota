@@ -28,9 +28,7 @@ export default function RulesPage() {
     const fetchInitialData = async () => {
         setLoading(true);
         try {
-            const [routesRes, stopsRes, segRes, stopRes, speedRes] = await Promise.all([
-                api.get('/routes'),
-                // Necesitamos un endpoint para todas las paradas o extraerlas de las rutas
+            const [routesRes, segRes, stopRes, speedRes] = await Promise.all([
                 api.get('/routes'),
                 api.get('/segment-rules'),
                 api.get('/stop-rules'),
@@ -38,8 +36,10 @@ export default function RulesPage() {
             ]);
 
             setRoutes(routesRes.data);
-            // Extraer todas las paradas únicas de todas las rutas para los selects
-            const allStops = routesRes.data.flatMap((r: any) => r.stops || []);
+            // Extraer todas las paradas únicas incluyendo su routeId
+            const allStops = routesRes.data.flatMap((r: any) =>
+                r.stops.map((s: any) => ({ ...s, routeId: r.id })) || []
+            );
             setStops(allStops);
 
             setSegmentRules(segRes.data);
@@ -59,11 +59,11 @@ export default function RulesPage() {
         } else {
             // Default form data based on active tab
             if (activeTab === 'segments') {
-                setFormData({ fromStopId: '', toStopId: '', maxTimeMinutes: 30 });
+                setFormData({ fromStopId: '', toStopId: '', maxTimeMinutes: 30, fineAmountUsd: 0 });
             } else if (activeTab === 'stops') {
-                setFormData({ stopId: '', maxDwellTimeMinutes: 5, minDwellTimeMinutes: 1 });
+                setFormData({ stopId: '', maxDwellMinutes: 5, fineAmountUsd: 0 });
             } else if (activeTab === 'speed') {
-                setFormData({ name: '', traccarGeofenceId: '', maxSpeedKmH: 60 });
+                setFormData({ name: '', routeId: '', traccarGeofenceId: '', maxSpeedKmh: 60, fineAmountUsd: 0 });
             }
         }
         setShowModal(true);
@@ -76,10 +76,25 @@ export default function RulesPage() {
                 : activeTab === 'stops' ? '/stop-rules'
                     : '/speed-zones';
 
+            let payload = { ...formData };
+
+            // Inyectar routeId automáticamente para reglas de segmentos
+            if (activeTab === 'segments') {
+                const selectedStop = stops.find((s: any) => s.id === formData.fromStopId) as any;
+                if (selectedStop) {
+                    payload.routeId = selectedStop.routeId;
+                }
+            }
+
+            // Map frontend naming to backend naming if needed (speed zones)
+            if (activeTab === 'speed') {
+                payload.geofenceId = formData.traccarGeofenceId || formData.geofenceId;
+            }
+
             if (editingRule) {
-                await api.put(`${endpoint}/${editingRule.id}`, formData);
+                await api.put(`${endpoint}/${editingRule.id}`, payload);
             } else {
-                await api.post(endpoint, formData);
+                await api.post(endpoint, payload);
             }
 
             setShowModal(false);
@@ -379,8 +394,8 @@ export default function RulesPage() {
                                     <input
                                         type="number"
                                         className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
-                                        value={formData.maxDwellTimeMinutes}
-                                        onChange={(e) => setFormData({ ...formData, maxDwellTimeMinutes: parseInt(e.target.value) })}
+                                        value={formData.maxDwellMinutes}
+                                        onChange={(e) => setFormData({ ...formData, maxDwellMinutes: parseInt(e.target.value) })}
                                     />
                                 </div>
                             </div>
