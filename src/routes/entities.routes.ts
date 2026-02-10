@@ -13,7 +13,12 @@ router.get('/vehicles', async (req: AuthRequest, res: Response) => {
     const vehicles = await prisma.vehicle.findMany({
         where: { tenantId: req.user?.tenantId as string }
     });
-    res.json(vehicles);
+    // Frontend expects 'name', map it from 'internalCode'
+    const response = vehicles.map(v => ({
+        ...v,
+        name: v.internalCode || v.plate
+    }));
+    res.json(response);
 });
 
 router.post('/vehicles', async (req: AuthRequest, res: Response) => {
