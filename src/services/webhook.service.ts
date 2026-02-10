@@ -29,13 +29,23 @@ export class WebhookService {
 
         if (!vehicle) {
             console.log(`[Webhook] ⚠️ Vehicle with traccarDeviceId ${traccarId} not found. Creating new vehicle...`);
+
+            // Extraer datos del dispositivo del payload
+            const deviceData = payload.device || {};
+            const deviceName = deviceData.name || `AUTO-${traccarId}`;
+            // Priorizar placa, luego nombre, luego ID
+            let plate = deviceData.plate_number || deviceData.name || `PENDING-${traccarId}`;
+
+            // Limpieza básica de placa si viene muy sucia (opcional, pero Traccar a veces manda basura)
+            if (plate.length > 20) plate = plate.substring(0, 20);
+
             try {
                 vehicle = await prisma.vehicle.create({
                     data: {
                         tenantId,
-                        plate: `PENDING-${traccarId}`, // Placa temporal
+                        plate: plate,
                         traccarDeviceId: traccarId,
-                        internalCode: `AUTO-${traccarId}`
+                        internalCode: deviceName
                     }
                 });
                 console.log(`[Webhook] ✅ Created new vehicle: ${vehicle.plate} (ID: ${vehicle.id})`);
@@ -68,13 +78,30 @@ export class WebhookService {
 
     private static async handleGeofenceEnter(tenantId: string, deviceId: string, payload: any) {
         const geofenceId = (payload.geofenceId || payload.geofence_id)?.toString();
+        const geofenceName = payload.geofence?.name || payload.additional?.geofence || 'Unknown Geofence';
+
         if (!geofenceId) return;
+
+        console.log(`[Webhook] 📍 Geofence Enter Detected: ${geofenceName} (ID: ${geofenceId}) for Device ${deviceId}`);
 
         // Buscar vehículo y parada
         const vehicle = await prisma.vehicle.findUnique({ where: { traccarDeviceId: parseInt(deviceId) } });
-        const stop = await prisma.stop.findFirst({ where: { tenantId, geofenceId } });
+        // Buscar parada por ID de geocerca
+        let stop = await prisma.stop.findFirst({ where: { tenantId, geofenceId } });
+
+        // Si no se encuentra por ID, intentar buscar por nombre (match laxo) para facilitar configuración
+        if (!stop && geofenceName) {
+            stop = await prisma.stop.findFirst({
+                where: {
+                    tenantId,
+                    name: { contains: geofenceName, mode: 'insensitive' }
+                }
+            });
+            if (stop) console.log(`[Webhook] 🔗 Linked Geofence '${geofenceName}' to Stop '${stop.name}' by name match.`);
+        }
 
         if (vehicle && stop) {
+            console.log(`[Webhook] 🚌 Bus ${vehicle.plate} arrived at Stop ${stop.name}`);
             // Registrar llegada
             await prisma.stopArrival.create({
                 data: {
@@ -84,11 +111,10 @@ export class WebhookService {
                     arrivedAt: new Date(payload.serverTime || payload.time || new Date())
                 }
             });
-
-            // La lógica de detección de tramo se disparará en handleGeofenceEnter o Exit dependiendo de la regla
-            // Por ahora registramos la llegada.
+        } else {
+            if (!vehicle) console.log(`[Webhook] ⚠️ Vehicle not found for ID ${deviceId}`);
+            if (!stop) console.log(`[Webhook] ⚠️ No Stop configured for Geofence '${geofenceName}' (ID: ${geofenceId}). Go to Rules > Stops to link it.`);
         }
-    }
 
     private static async handleGeofenceExit(tenantId: string, deviceId: string, payload: any) {
         const geofenceId = (payload.geofenceId || payload.geofence_id)?.toString();
