@@ -86,6 +86,16 @@ export default function RulesPage() {
                 }
                 // Backend expects 'expectedMaxMinutes', frontend uses 'maxTimeMinutes'
                 payload.expectedMaxMinutes = formData.maxTimeMinutes;
+
+                // CRITICAL: Remove fields not in Prisma schema to avoid "Unknown argument" error
+                delete payload.maxTimeMinutes;
+            }
+
+            if (activeTab === 'stops') {
+                // CRITICAL: Remove fields not in Prisma schema
+                delete payload.minDwellTimeMinutes;
+                // Ensure maxDwellMinutes is int
+                payload.maxDwellMinutes = parseInt(formData.maxDwellMinutes);
             }
 
             // Map frontend naming to backend naming if needed (speed zones)
@@ -93,7 +103,7 @@ export default function RulesPage() {
                 payload.geofenceId = formData.traccarGeofenceId || formData.geofenceId;
             }
 
-            console.log('Sending Rule Payload:', payload); // Debug log
+            console.log('Sending Rule Payload (Sanitized):', payload); // Debug log
 
             if (editingRule) {
                 await api.put(`${endpoint}/${editingRule.id}`, payload);
