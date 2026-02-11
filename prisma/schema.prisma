@@ -124,6 +124,7 @@ model Stop {
   rules        StopRule[]
   segmentFrom  SegmentRule[] @relation("FromStop")
   segmentTo    SegmentRule[] @relation("ToStop")
+  speedZones   SpeedZone[]
 
   @@map("stops")
 }
