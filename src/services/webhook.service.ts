@@ -5,108 +5,82 @@ const prisma = new PrismaClient();
 
 export class WebhookService {
     static async processEvent(tenantId: string, deviceId: string, eventType: string, payload: any) {
-        // 1. Guardar el evento raw
-        const event = await prisma.gpsEvent.create({
-            data: {
-                tenantId,
-                deviceId: deviceId.toString(),
-                eventType,
-                rawPayload: payload
-            }
-        });
+        try {
+            console.log(`[Webhook] 📥 Starting Event Processing: ${eventType} for Device ${deviceId}`);
 
-        // 1.5 Verificar si el vehículo existe, si no, crearlo automáticamente
-        let traccarId = parseInt(deviceId);
-        console.log(`[Webhook] Processing deviceId raw: '${deviceId}'`);
+            // 1. Guardar el evento raw
+            const event = await prisma.gpsEvent.create({
+                data: {
+                    tenantId,
+                    deviceId: deviceId.toString(),
+                    eventType,
+                    rawPayload: payload
+                }
+            });
 
-        // Intento robusto de parseo si viene como objeto o string raro
-        if (isNaN(traccarId)) {
-            // A veces traccar manda cosas raras, intentamos extraer números
-            const numericId = deviceId.toString().replace(/\D/g, '');
-            if (numericId) {
-                traccarId = parseInt(numericId);
-                console.log(`[Webhook] ⚠️ Recovered numeric ID from '${deviceId}': ${traccarId}`);
-            } else {
-                console.error(`[Webhook] ❌ Error: deviceId '${deviceId}' could not be parsed to number.`);
-                return;
-            }
-        }
+            // 1.5 Verificar si el vehículo existe, si no, crearlo automáticamente
+            let traccarId = parseInt(deviceId);
 
-        console.log(`[Webhook] Search/Create Vehicle with traccarId: ${traccarId}`);
-
-        let vehicle = await prisma.vehicle.findUnique({
-            where: { traccarDeviceId: traccarId }
-        });
-
-        if (!vehicle) {
-            console.log(`[Webhook] ⚠️ Vehicle with traccarDeviceId ${traccarId} not found. Creating new vehicle...`);
-
-            // Extraer datos del dispositivo del payload
-            const deviceData = payload.device || {};
-            const deviceName = deviceData.name || `AUTO-${traccarId}`;
-            // Priorizar placa, luego nombre, luego ID
-            let plate = deviceData.plate_number || deviceData.name || `PENDING-${traccarId}`;
-
-            // Limpieza básica de placa si viene muy sucia (opcional, pero Traccar a veces manda basura)
-            if (plate.length > 20) plate = plate.substring(0, 20);
-
-            try {
-                vehicle = await prisma.vehicle.create({
-                    data: {
-                        tenantId,
-                        plate: plate,
-                        traccarDeviceId: traccarId,
-                        internalCode: deviceName
-                    }
-                });
-                console.log(`[Webhook] ✅ Created new vehicle: ${vehicle.plate} (ID: ${vehicle.id})`);
-            } catch (error) {
-                console.error(`[Webhook] ❌ Error creating auto-vehicle ${traccarId}:`, error);
-            }
-        } else {
-            console.log(`[Webhook] ℹ️ Vehicle found: ${vehicle.plate}`);
-
-            // Auto-corrección: Si el vehículo tiene placa PENDING pero ahora viene info real, actualizamos
-            if (vehicle.plate.startsWith('PENDING-')) {
-                const deviceData = payload.device || {};
-                const newPlate = deviceData.plate_number || deviceData.name;
-                const newName = deviceData.name;
-
-                if (newPlate && newPlate !== vehicle.plate) {
-                    console.log(`[Webhook] 🔄 Updating PENDING vehicle ${vehicle.id} with real data: ${newPlate}`);
-                    try {
-                        vehicle = await prisma.vehicle.update({
-                            where: { id: vehicle.id },
-                            data: {
-                                plate: newPlate.substring(0, 20),
-                                internalCode: newName || vehicle.internalCode
-                            }
-                        });
-                        console.log(`[Webhook] ✅ Vehicle updated to: ${vehicle.plate}`);
-                    } catch (error) {
-                        console.error(`[Webhook] ❌ Error updating vehicle ${vehicle.id}:`, error);
-                    }
+            // Intento robusto de parseo si viene como objeto o string raro
+            if (isNaN(traccarId)) {
+                // A veces traccar manda cosas raras, intentamos extraer números
+                const numericId = deviceId.toString().replace(/\D/g, '');
+                if (numericId) {
+                    traccarId = parseInt(numericId);
+                } else {
+                    console.error(`[Webhook] ❌ Error: deviceId '${deviceId}' could not be parsed to number.`);
+                    return;
                 }
             }
-        }
 
-        // 2. Procesar según tipo de evento
-        try {
-            if (eventType === 'geofenceEnter') {
-                await this.handleGeofenceEnter(tenantId, deviceId.toString(), payload);
-            } else if (eventType === 'geofenceExit') {
-                await this.handleGeofenceExit(tenantId, deviceId.toString(), payload);
-            } else if (eventType === 'deviceOverspeed') {
-                await this.handleOverspeed(tenantId, deviceId.toString(), payload);
+            let vehicle = await prisma.vehicle.findUnique({
+                where: { traccarDeviceId: traccarId }
+            });
+
+            if (!vehicle) {
+                console.log(`[Webhook] ⚠️ Vehicle ${traccarId} not found. Auto-creating...`);
+                // Extraer datos del dispositivo del payload
+                const deviceData = payload.device || {};
+                const deviceName = deviceData.name || `AUTO-${traccarId}`;
+                let plate = deviceData.plate_number || deviceData.name || `PENDING-${traccarId}`;
+
+                if (plate.length > 20) plate = plate.substring(0, 20);
+
+                try {
+                    vehicle = await prisma.vehicle.create({
+                        data: {
+                            tenantId,
+                            plate: plate,
+                            traccarDeviceId: traccarId,
+                            internalCode: deviceName
+                        }
+                    });
+                    console.log(`[Webhook] ✅ Created new vehicle: ${vehicle.plate}`);
+                } catch (error) {
+                    console.error(`[Webhook] ❌ Error creating auto-vehicle ${traccarId}:`, error);
+                }
             }
 
-            // Marcar como procesado
-            await prisma.gpsEvent.update({
-                where: { id: event.id },
-                data: { processedAt: new Date() }
-            });
+            // 2. Procesar según tipo de evento
+            if (vehicle) {
+                if (eventType === 'geofenceEnter') {
+                    await this.handleGeofenceEnter(tenantId, deviceId.toString(), payload);
+                } else if (eventType === 'geofenceExit') {
+                    await this.handleGeofenceExit(tenantId, deviceId.toString(), payload);
+                } else if (eventType === 'deviceOverspeed') {
+                    await this.handleOverspeed(tenantId, deviceId.toString(), payload);
+                }
+
+                // Marcar como procesado
+                await prisma.gpsEvent.update({
+                    where: { id: event.id },
+                    data: { processedAt: new Date() }
+                });
+
+                console.log(`[Webhook] 🏁 Event ${event.id} processed successfully.`);
+            }
         } catch (error) {
-            console.error('Error processing webhook event:', error);
+            console.error('[Webhook] ❌ UNHANDLED ERROR in processEvent:', error);
         }
     }
 
