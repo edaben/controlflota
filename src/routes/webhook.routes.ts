@@ -7,8 +7,8 @@ const prisma = new PrismaClient();
 
 router.post('/traccar', async (req: Request, res: Response) => {
     // Log para depuración
-    console.log('[Webhook] --- Incoming Webhook Request ---');
-    console.log('[Webhook] Headers:', JSON.stringify(req.headers));
+    console.log('[Webhook] --- Incoming Webhook ---');
+    console.log(`[Webhook] Method: ${req.method} | Params:`, JSON.stringify(req.query));
     console.log('[Webhook] Body:', JSON.stringify(req.body));
 
     const apiKey = (req.headers['x-api-key'] || req.query.apiKey)?.toString();

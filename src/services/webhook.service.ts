@@ -111,140 +111,11 @@ export class WebhookService {
     }
 
     private static async handleGeofenceEnter(tenantId: string, deviceId: string, payload: any) {
-        const geofenceId = (payload.geofenceId || payload.geofence_id)?.toString();
-        const geofenceName = payload.geofence?.name || payload.additional?.geofence || 'Unknown Geofence';
+        console.log(`[Webhook] 📍 Geofence Enter Processing for Device ${deviceId}`);
 
-        if (!geofenceId) return;
-
-        console.log(`[Webhook] 📍 Geofence Enter Detected: ${geofenceName} (ID: ${geofenceId}) for Device ${deviceId}`);
-
-        // Buscar vehículo y parada
+        // 1. Obtener o crear la parada (Geocerca)
+        const stop = await this.getOrCreateStop(tenantId, payload);
         const vehicle = await prisma.vehicle.findUnique({ where: { traccarDeviceId: parseInt(deviceId) } });
-        // Buscar parada por ID de geocerca
-        let stop = await prisma.stop.findFirst({ where: { tenantId, geofenceId } });
-
-        // Si no se encuentra por ID, intentar buscar por nombre (match laxo) para facilitar configuración
-        if (!stop && geofenceName) {
-            stop = await prisma.stop.findFirst({
-                where: {
-                    tenantId,
-                    name: { contains: geofenceName, mode: 'insensitive' }
-                }
-            });
-            if (stop) console.log(`[Webhook] 🔗 Linked Geofence '${geofenceName}' to Stop '${stop.name}' by name match.`);
-        }
-
-        // AUTO-CREACIÓN: Si no existe la parada y tenemos ID y Nombre, la creamos
-        if (!stop && geofenceId && geofenceName) {
-            console.log(`[Webhook] 🆕 New Geofence detected: ${geofenceName} (ID: ${geofenceId}). Auto-creating...`);
-
-            // 1. Buscar o crear ruta por defecto para importaciones
-            let defaultRoute = await prisma.route.findFirst({
-                where: { tenantId, name: 'Geocercas Importadas' }
-            });
-
-            if (!defaultRoute) {
-                defaultRoute = await prisma.route.create({
-                    data: {
-                        tenantId,
-                        name: 'Geocercas Importadas',
-                        description: 'Geocercas detectadas automáticamente desde Traccar'
-                    }
-                });
-            }
-
-            // 2. Crear la parada
-            try {
-                // Extraer geometría de la geocerca
-                let geofenceType = 'circle';
-                let geofenceRadius = 0;
-                let geofenceCoordinates = null;
-                let stopLat: number | null = null;
-                let stopLng: number | null = null;
-
-                // Traccar suele enviar el área en WKT (Well-Known Text) dentro de 'area' o 'geofence.area'
-                // O a veces envía 'coordinates' como JSON string en 'geofence.coordinates'
-                const area = payload.geofence?.area || payload.additional?.area || '';
-                const rawCoordinates = payload.geofence?.coordinates;
-
-                if (area.startsWith('CIRCLE')) {
-                    geofenceType = 'circle';
-                    const match = area.match(/CIRCLE\s*\(([^)]+)\)/);
-                    if (match) {
-                        // Normalize separators: replace commas with spaces, then split by space
-                        const parts = match[1].replace(/,/g, ' ').trim().split(/\s+/).map(Number);
-
-                        // Expecting: lat, lon, radius (3 parts) OR lat, lon (2 parts, weird)
-                        if (parts.length >= 3) {
-                            stopLat = parts[0];
-                            stopLng = parts[1];
-                            geofenceRadius = parts[2];
-                        } else if (parts.length === 2) {
-                            stopLat = parts[0];
-                            stopLng = parts[1];
-                            geofenceRadius = 100; // Default radius if missing
-                        }
-                    }
-                } else if (area.startsWith('POLYGON')) {
-                    geofenceType = 'polygon';
-                    const match = area.match(/POLYGON\s*\(\(([^)]+)\)\)/);
-                    if (match) {
-                        // "lat1 lon1, lat2 lon2, ..." -> replace commas with nothing if space separated
-                        // Actually better to split by comma first then by space
-                        const rawPoints = match[1].split(',');
-                        const points = rawPoints.map((p: string) => {
-                            const [p1, p2] = p.trim().split(/\s+/).map(Number);
-                            return { lat: p1, lng: p2 };
-                        });
-                        geofenceCoordinates = points as any;
-                        if (points.length > 0) {
-                            stopLat = points[0].lat;
-                            stopLng = points[0].lng;
-                        }
-                    }
-                } else if (rawCoordinates) {
-                    // CASE: Traccar sends "coordinates": "[{'lat':..., 'lng':...}]" (JSON String)
-                    try {
-                        const parsed = typeof rawCoordinates === 'string' ? JSON.parse(rawCoordinates) : rawCoordinates;
-                        if (Array.isArray(parsed) && parsed.length > 0) {
-                            geofenceType = 'polygon';
-                            geofenceCoordinates = parsed;
-                            // Set center to first point
-                            if (parsed[0].lat && parsed[0].lng) {
-                                stopLat = parsed[0].lat;
-                                stopLng = parsed[0].lng;
-                            }
-                        }
-                    } catch (e) {
-                        console.error('[Webhook] Failed to parse geofence coordinates JSON:', e);
-                    }
-                }
-
-                if (!stopLat && !stopLng && payload.latitude && payload.longitude) {
-                    // Fallback: use event position if geofence center is unknown
-                    stopLat = payload.latitude;
-                    stopLng = payload.longitude;
-                }
-
-                stop = await prisma.stop.create({
-                    data: {
-                        tenantId,
-                        routeId: defaultRoute.id,
-                        name: geofenceName,
-                        geofenceId: geofenceId,
-                        geofenceType,
-                        geofenceRadius: geofenceRadius > 0 ? geofenceRadius : null,
-                        geofenceCoordinates: geofenceCoordinates || undefined,
-                        latitude: stopLat,
-                        longitude: stopLng,
-                        order: 0
-                    }
-                });
-                console.log(`[Webhook] ✅ Stop auto-created: ${stop.name} in route 'Geocercas Importadas'`);
-            } catch (error) {
-                console.error(`[Webhook] ❌ Error auto-creating stop:`, error);
-            }
-        }
 
         if (vehicle && stop) {
             console.log(`[Webhook] 🚌 Bus ${vehicle.plate} arrived at Stop ${stop.name}`);
@@ -258,17 +129,16 @@ export class WebhookService {
                 }
             });
         } else {
-            if (!vehicle) console.log(`[Webhook] ⚠️ Vehicle not found for ID ${deviceId}`);
-            if (!stop) console.log(`[Webhook] ⚠️ No Stop configured for Geofence '${geofenceName}' (ID: ${geofenceId}). Go to Rules > Stops to link it.`);
+            console.log(`[Webhook] ⚠️ Missing vehicle (${!!vehicle}) or stop (${!!stop}) for event processing.`);
         }
     }
 
     private static async handleGeofenceExit(tenantId: string, deviceId: string, payload: any) {
-        const geofenceId = (payload.geofenceId || payload.geofence_id)?.toString();
-        if (!geofenceId) return;
+        console.log(`[Webhook] 🚩 Geofence Exit Processing for Device ${deviceId}`);
 
+        // 1. Obtener o crear la parada (Geocerca) - Por si nos saltamos el Enter
+        const stop = await this.getOrCreateStop(tenantId, payload);
         const vehicle = await prisma.vehicle.findUnique({ where: { traccarDeviceId: parseInt(deviceId) } });
-        const stop = await prisma.stop.findFirst({ where: { tenantId, geofenceId } });
 
         if (vehicle && stop) {
             // Buscar la última llegada abierta (sin departedAt)
@@ -293,6 +163,106 @@ export class WebhookService {
                 // Disparar detección de dwell time (exceso en parada)
                 await InfractionService.detectDwellTimeInfraction(tenantId, vehicle.id, stop.id, dwellMinutes);
             }
+        }
+    }
+
+    /**
+     * Extrae de forma robusta los datos de la geocerca y la crea si no existe
+     */
+    private static async getOrCreateStop(tenantId: string, payload: any) {
+        // Traccar manda la geocerca en distintos sitios según la versión o config
+        const geofence = payload.geofence || payload.event?.attributes || payload.additional || {};
+        const geofenceId = (payload.geofenceId || payload.geofence_id || geofence.id || geofence.geofenceId)?.toString();
+        const geofenceName = geofence.name || geofence.geofenceName || geofence.geofence || 'Unknown Geofence';
+
+        if (!geofenceId) {
+            console.log('[Webhook] ⚠️ Could not find geofenceId in payload:', JSON.stringify(payload).substring(0, 200));
+            return null;
+        }
+
+        // 1. Buscar parada existente
+        let stop = await prisma.stop.findFirst({
+            where: { tenantId, geofenceId }
+        });
+
+        if (!stop && geofenceName !== 'Unknown Geofence') {
+            stop = await prisma.stop.findFirst({
+                where: {
+                    tenantId,
+                    name: { equals: geofenceName, mode: 'insensitive' }
+                }
+            });
+            if (stop) {
+                console.log(`[Webhook] 🔗 Linked existing Stop '${stop.name}' to Geofence ID ${geofenceId} by name.`);
+                await prisma.stop.update({ where: { id: stop.id }, data: { geofenceId } });
+            }
+        }
+
+        if (stop) return stop;
+
+        // 2. Si no existe, crearla automáticamente
+        console.log(`[Webhook] 🆕 Auto-importing new Geofence: ${geofenceName} (ID: ${geofenceId})`);
+
+        // Buscar o crear ruta por defecto
+        let defaultRoute = await prisma.route.findFirst({ where: { tenantId, name: 'Geocercas Importadas' } });
+        if (!defaultRoute) {
+            defaultRoute = await prisma.route.create({
+                data: { tenantId, name: 'Geocercas Importadas', description: 'Detectadas automáticamente desde Traccar' }
+            });
+        }
+
+        // Extraer geometría
+        let geofenceType = 'circle';
+        let geofenceRadius = 100;
+        let geofenceCoordinates = null;
+        let stopLat = payload.latitude || null;
+        let stopLng = payload.longitude || null;
+
+        const area = geofence.area || '';
+
+        if (area.toUpperCase().startsWith('CIRCLE')) {
+            const match = area.match(/CIRCLE\s*\(([^)]+)\)/i);
+            if (match) {
+                const parts = match[1].replace(/,/g, ' ').trim().split(/\s+/).map(Number);
+                if (parts.length >= 3) {
+                    stopLat = parts[0];
+                    stopLng = parts[1];
+                    geofenceRadius = parts[2];
+                }
+            }
+        } else if (area.toUpperCase().startsWith('POLYGON')) {
+            geofenceType = 'polygon';
+            const match = area.match(/POLYGON\s*\(\(([^)]+)\)\)/i);
+            if (match) {
+                const points = match[1].split(',').map((p: string) => {
+                    const [lat, lng] = p.trim().split(/\s+/).map(Number);
+                    return { lat, lng };
+                });
+                geofenceCoordinates = points;
+                if (points.length > 0) {
+                    stopLat = points[0].lat;
+                    stopLng = points[0].lng;
+                }
+            }
+        }
+
+        try {
+            return await prisma.stop.create({
+                data: {
+                    tenantId,
+                    routeId: defaultRoute.id,
+                    name: geofenceName,
+                    geofenceId,
+                    geofenceType,
+                    geofenceRadius: geofenceType === 'circle' ? geofenceRadius : null,
+                    geofenceCoordinates: geofenceCoordinates || undefined,
+                    latitude: stopLat,
+                    longitude: stopLng
+                }
+            });
+        } catch (error) {
+            console.error('[Webhook] ❌ Error creating stop:', error);
+            return null;
         }
     }
 
