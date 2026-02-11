@@ -399,8 +399,8 @@ export default function RulesPage() {
                                 <input
                                     type="number"
                                     className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
-                                    value={formData.maxTimeMinutes}
-                                    onChange={(e) => setFormData({ ...formData, maxTimeMinutes: parseInt(e.target.value) })}
+                                    value={formData.maxTimeMinutes || 0}
+                                    onChange={(e) => setFormData({ ...formData, maxTimeMinutes: parseInt(e.target.value) || 0 })}
                                     required
                                 />
                             </div>
@@ -412,8 +412,8 @@ export default function RulesPage() {
                                         type="number"
                                         step="0.01"
                                         className="w-full pl-8 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
-                                        value={formData.fineAmountUsd}
-                                        onChange={(e) => setFormData({ ...formData, fineAmountUsd: parseFloat(e.target.value) })}
+                                        value={formData.fineAmountUsd || 0}
+                                        onChange={(e) => setFormData({ ...formData, fineAmountUsd: parseFloat(e.target.value) || 0 })}
                                         placeholder="0.00"
                                         required
                                     />
@@ -551,8 +551,8 @@ export default function RulesPage() {
                                 <input
                                     type="number"
                                     className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
-                                    value={formData.maxSpeedKmh}
-                                    onChange={(e) => setFormData({ ...formData, maxSpeedKmh: parseInt(e.target.value) })}
+                                    value={formData.maxSpeedKmh || 0}
+                                    onChange={(e) => setFormData({ ...formData, maxSpeedKmh: parseInt(e.target.value) || 0 })}
                                     required
                                 />
                             </div>
@@ -564,8 +564,8 @@ export default function RulesPage() {
                                         type="number"
                                         step="0.01"
                                         className="w-full pl-8 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
-                                        value={formData.fineAmountUsd}
-                                        onChange={(e) => setFormData({ ...formData, fineAmountUsd: parseFloat(e.target.value) })}
+                                        value={formData.fineAmountUsd || 0}
+                                        onChange={(e) => setFormData({ ...formData, fineAmountUsd: parseFloat(e.target.value) || 0 })}
                                         placeholder="0.00"
                                         required
                                     />
