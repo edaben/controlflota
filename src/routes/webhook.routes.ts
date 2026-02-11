@@ -48,7 +48,7 @@ router.post('/traccar', async (req: Request, res: Response) => {
         // Mappear tipos de eventos de Traccar a los internos
         if (type === 'zone_in') type = 'geofenceEnter';
         if (type === 'zone_out') type = 'geofenceExit';
-        // type === 'deviceOverspeed' suele ser igual, pero si llega distinto se puede añadir aquí
+        if (type === 'overspeed') type = 'deviceOverspeed';
 
         console.log(`[Webhook] ✅ Valid request for tenant ${tenant.name}. Processing event: ${type} for device: ${deviceId}`);
 
