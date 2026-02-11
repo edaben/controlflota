@@ -1,8 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyToken } from '../utils/auth';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { Permission, DEFAULT_ROLE_PERMISSIONS } from '../constants/permissions';
 
 export interface AuthRequest extends Request {
     user?: {
@@ -10,6 +8,7 @@ export interface AuthRequest extends Request {
         email: string;
         role: string;
         tenantId?: string | null;
+        permissions?: string[];
     };
 }
 
@@ -20,7 +19,7 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
     }
 
     const token = authHeader.split(' ')[1];
-    const decoded = verifyToken(token);
+    const decoded = verifyToken(token) as any;
 
     if (!decoded) {
         return res.status(401).json({ error: 'Invalid or expired token' });
@@ -30,12 +29,44 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
     next();
 };
 
-export const authorize = (roles: string[]) => {
+/**
+ * Middleware para autorizar basado en roles O permisos específicos.
+ * @param roles Roles permitidos (ej: ['SUPER_ADMIN'])
+ * @param requiredPermissions Permisos necesarios (opcional)
+ */
+export const authorize = (roles: string[] = [], requiredPermissions: Permission[] = []) => {
     return (req: AuthRequest, res: Response, next: NextFunction) => {
-        if (!req.user || !roles.includes(req.user.role)) {
+        if (!req.user) {
             return res.status(403).json({ error: 'Access denied' });
         }
-        next();
+
+        // 1. SUPER_ADMIN siempre tiene acceso total
+        if (req.user.role === 'SUPER_ADMIN') {
+            return next();
+        }
+
+        // 2. Verificar Roles (Backward compatibility)
+        const hasRole = roles.length === 0 || roles.includes(req.user.role);
+
+        // 3. Verificar Permisos
+        // Si el usuario tiene permisos específicos asignados, estos son la única fuente de verdad.
+        // Si no tiene ninguno (array vacío o nulo), usamos los del rol (backward compatibility). 
+        let effectivePermissions: string[] = [];
+
+        if (req.user.permissions && req.user.permissions.length > 0) {
+            effectivePermissions = req.user.permissions;
+        } else {
+            effectivePermissions = DEFAULT_ROLE_PERMISSIONS[req.user.role] || [];
+        }
+
+        const hasPermissions = requiredPermissions.length === 0 ||
+            requiredPermissions.every(p => effectivePermissions.includes(p));
+
+        if (hasRole && hasPermissions) {
+            return next();
+        }
+
+        return res.status(403).json({ error: 'Insufficient permissions' });
     };
 };
 

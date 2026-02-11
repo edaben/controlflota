@@ -15,25 +15,48 @@ import {
     MapPin
 } from 'lucide-react';
 
+import { PERMISSIONS } from '../constants/permissions';
+import { hasPermission } from '../utils/permissions';
+
 const Sidebar = () => {
     const pathname = usePathname();
     const router = useRouter();
+    const [user, setUser] = React.useState<any>(null);
+
+    React.useEffect(() => {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+            try {
+                const parsedUser = JSON.parse(userStr);
+                setUser(parsedUser);
+            } catch (e) {
+                console.error('Error parsing user from localStorage', e);
+            }
+        }
+    }, []);
 
     const navItems = [
-        { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-        { href: '/tenants', icon: Building2, label: 'Clientes' },
-        { href: '/users', icon: User, label: 'Usuarios' },
-        { href: '/infractions', icon: AlertTriangle, label: 'Infracciones' },
-        { href: '/fines', icon: FileText, label: 'Multas' },
-        { href: '/consolidated', icon: Mail, label: 'Consolidados' },
-        { href: '/vehicles', icon: Truck, label: 'Vehículos' },
-        { href: '/routes', icon: MapPin, label: 'Rutas y Paradas' }, // Added new navigation item
-        { href: '/rules', icon: Settings, label: 'Reglas' },
-        { href: '/settings/webhook', icon: Webhook, label: 'Webhook' },
+        { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', permission: PERMISSIONS.VIEW_DASHBOARD },
+        { href: '/tenants', icon: Building2, label: 'Clientes', permission: PERMISSIONS.VIEW_TENANTS },
+        { href: '/users', icon: User, label: 'Usuarios', permission: PERMISSIONS.VIEW_USERS },
+        { href: '/infractions', icon: AlertTriangle, label: 'Infracciones', permission: PERMISSIONS.VIEW_INFRACTIONS },
+        { href: '/fines', icon: FileText, label: 'Multas', permission: PERMISSIONS.VIEW_FINES },
+        { href: '/consolidated', icon: Mail, label: 'Consolidados', permission: PERMISSIONS.VIEW_REPORTS },
+        { href: '/vehicles', icon: Truck, label: 'Vehículos', permission: PERMISSIONS.VIEW_VEHICLES },
+        { href: '/routes', icon: MapPin, label: 'Rutas y Paradas', permission: PERMISSIONS.VIEW_ROUTES },
+        { href: '/rules', icon: Settings, label: 'Reglas', permission: PERMISSIONS.VIEW_RULES },
+        { href: '/settings/smtp', icon: Mail, label: 'Configuración SMTP', permission: PERMISSIONS.MANAGE_SETTINGS },
+        { href: '/settings/webhook', icon: Webhook, label: 'Webhook', permission: PERMISSIONS.MANAGE_SETTINGS },
+        { href: '/profile', icon: User, label: 'Mi Perfil', permission: PERMISSIONS.VIEW_DASHBOARD },
     ];
+
+    const filteredNavItems = navItems.filter(item => {
+        return hasPermission(user, item.permission as any);
+    });
 
     const handleLogout = () => {
         localStorage.removeItem('token');
+        localStorage.removeItem('user');
         router.push('/login');
     };
 
@@ -46,7 +69,7 @@ const Sidebar = () => {
             </div>
 
             <nav className="flex-1 px-4 space-y-2">
-                {navItems.map((item) => {
+                {filteredNavItems.map((item) => {
                     const isActive = pathname === item.href;
                     return (
                         <Link

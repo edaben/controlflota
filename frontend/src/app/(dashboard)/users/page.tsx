@@ -1,14 +1,17 @@
 'use client'
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { User, Plus, Shield, Pencil, Trash2 } from 'lucide-react';
 import Modal from '@/components/Modal';
+import { PERMISSIONS, PERMISSION_LABELS, DEFAULT_ROLE_PERMISSIONS, Permission } from '@/constants/permissions';
 
 interface UserData {
     id: string;
     email: string;
     role: string;
+    permissions: string[];
     tenantId: string;
     createdAt: string;
     updatedAt: string;
@@ -16,6 +19,7 @@ interface UserData {
 }
 
 export default function UsersPage() {
+    const router = useRouter();
     const [users, setUsers] = useState<UserData[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -23,10 +27,24 @@ export default function UsersPage() {
     const [formData, setFormData] = useState({
         email: '',
         password: '',
-        role: 'CLIENT_USER'
+        role: 'CLIENT_USER',
+        permissions: [] as string[]
     });
 
     useEffect(() => {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+            try {
+                const user = JSON.parse(userStr);
+                // Si no es admin ni super, fuera
+                if (user.role === 'CLIENT_USER') {
+                    router.push('/dashboard');
+                    return;
+                }
+            } catch (e) {
+                console.error('Error parsing user', e);
+            }
+        }
         fetchUsers();
     }, []);
 
@@ -34,8 +52,9 @@ export default function UsersPage() {
         try {
             const { data } = await api.get('/users');
             setUsers(data);
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
+            alert(`Error al cargar usuarios: ${err.message}`);
         } finally {
             setLoading(false);
         }
@@ -47,14 +66,16 @@ export default function UsersPage() {
             setFormData({
                 email: user.email,
                 password: '',
-                role: user.role
+                role: user.role,
+                permissions: user.permissions || []
             });
         } else {
             setEditingUser(null);
             setFormData({
                 email: '',
                 password: '',
-                role: 'CLIENT_USER'
+                role: 'CLIENT_USER',
+                permissions: DEFAULT_ROLE_PERMISSIONS['CLIENT_USER'] || []
             });
         }
         setIsModalOpen(true);
@@ -66,34 +87,59 @@ export default function UsersPage() {
         setFormData({
             email: '',
             password: '',
-            role: 'CLIENT_USER'
+            role: 'CLIENT_USER',
+            permissions: []
+        });
+    };
+
+    const handleRoleChange = (newRole: string) => {
+        const defaultPerms = DEFAULT_ROLE_PERMISSIONS[newRole] || [];
+        setFormData({
+            ...formData,
+            role: newRole,
+            permissions: defaultPerms
+        });
+    };
+
+    const togglePermission = (perm: string) => {
+        setFormData(prev => {
+            const has = prev.permissions.includes(perm);
+            if (has) {
+                return { ...prev, permissions: prev.permissions.filter(p => p !== perm) };
+            } else {
+                return { ...prev, permissions: [...prev.permissions, perm] };
+            }
         });
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
+            const payload = {
+                email: formData.email,
+                role: formData.role,
+                permissions: formData.permissions
+            };
+
             if (editingUser) {
-                const updateData: any = {
-                    email: formData.email,
-                    role: formData.role
-                };
+                const updateData: any = { ...payload };
                 if (formData.password) {
                     updateData.password = formData.password;
                 }
                 await api.put(`/users/${editingUser.id}`, updateData);
             } else {
                 await api.post('/users', {
-                    email: formData.email,
-                    password: formData.password,
-                    role: formData.role
+                    ...payload,
+                    password: formData.password
                 });
             }
             handleCloseModal();
             fetchUsers();
+            alert('Usuario guardado exitosamente');
         } catch (err: any) {
             console.error(err);
-            alert(err.response?.data?.error || 'Error al guardar el usuario');
+            const errorMessage = err.response?.data?.error || err.message || 'Error desconocido';
+            alert(`Error al guardar: ${errorMessage}`);
         }
     };
 
@@ -226,13 +272,51 @@ export default function UsersPage() {
                         </label>
                         <select
                             value={formData.role}
-                            onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                            onChange={(e) => handleRoleChange(e.target.value)}
                             className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         >
                             <option value="CLIENT_USER">Usuario Cliente</option>
                             <option value="CLIENT_ADMIN">Administrador Cliente</option>
                             <option value="SUPER_ADMIN">Super Administrador</option>
                         </select>
+                    </div>
+
+                    <div className="pt-2">
+                        <label className="block text-sm font-medium text-slate-300 mb-3">
+                            Permisos Específicos
+                        </label>
+                        <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 max-h-60 overflow-y-auto space-y-4">
+                            {Object.entries(
+                                Object.values(PERMISSIONS).reduce((acc, perm) => {
+                                    const cat = PERMISSION_LABELS[perm as Permission]?.category || 'Otros';
+                                    if (!acc[cat]) acc[cat] = [];
+                                    acc[cat].push(perm as Permission);
+                                    return acc;
+                                }, {} as Record<string, Permission[]>)
+                            ).map(([category, perms]) => (
+                                <div key={category} className="space-y-2">
+                                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">{category}</h4>
+                                    <div className="grid grid-cols-1 gap-2">
+                                        {perms.map(perm => (
+                                            <label key={perm} className="flex items-center gap-3 cursor-pointer group">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={formData.permissions.includes(perm)}
+                                                    onChange={() => togglePermission(perm)}
+                                                    className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500/20"
+                                                />
+                                                <span className="text-sm text-slate-400 group-hover:text-slate-200 transition-colors">
+                                                    {PERMISSION_LABELS[perm]?.label || perm}
+                                                </span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-2">
+                            * Los permisos marcados son efectivos para este usuario. SUPER_ADMIN tiene acceso total por defecto.
+                        </p>
                     </div>
 
                     <div className="flex gap-3 pt-4">

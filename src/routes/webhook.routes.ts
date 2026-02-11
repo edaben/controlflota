@@ -67,6 +67,11 @@ import { authenticate, AuthRequest } from '../middleware/auth.middleware';
 
 router.get('/logs', authenticate, async (req: AuthRequest, res: Response) => {
     try {
+        const tenant = await prisma.tenant.findUnique({
+            where: { id: req.user?.tenantId as string },
+            select: { apiKey: true }
+        });
+
         const logs = await prisma.gpsEvent.findMany({
             where: { tenantId: req.user?.tenantId as string },
             orderBy: { createdAt: 'desc' },
@@ -83,6 +88,7 @@ router.get('/logs', authenticate, async (req: AuthRequest, res: Response) => {
         }));
 
         res.json({
+            apiKey: tenant?.apiKey,
             logs: formattedLogs,
             stats: {
                 total: await prisma.gpsEvent.count({ where: { tenantId: req.user?.tenantId as string } }),
@@ -97,6 +103,21 @@ router.get('/logs', authenticate, async (req: AuthRequest, res: Response) => {
         });
     } catch (error) {
         res.status(500).json({ error: 'Error fetching logs' });
+    }
+});
+
+router.delete('/logs', authenticate, async (req: AuthRequest, res: Response) => {
+    try {
+        const tenantId = req.user?.tenantId as string;
+
+        await prisma.gpsEvent.deleteMany({
+            where: { tenantId }
+        });
+
+        res.json({ success: true, message: 'Recent events cleared successfully' });
+    } catch (error) {
+        console.error('[Webhook] Error clearing logs:', error);
+        res.status(500).json({ error: 'Error clearing logs' });
     }
 });
 

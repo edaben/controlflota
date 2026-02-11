@@ -5,6 +5,9 @@ import api from '@/lib/api';
 import { Settings, Route, MapPin, Gauge, Plus, Trash2, Edit2 } from 'lucide-react';
 import Modal from '@/components/Modal';
 
+import { PERMISSIONS } from '@/constants/permissions';
+import { hasPermission } from '@/utils/permissions';
+
 export default function RulesPage() {
     const [activeTab, setActiveTab] = useState('segments');
     const [loading, setLoading] = useState(true);
@@ -21,7 +24,18 @@ export default function RulesPage() {
     // Form states
     const [formData, setFormData] = useState<any>({});
 
+    const [user, setUser] = useState<any>(null);
+
     useEffect(() => {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+            try {
+                const parsedUser = JSON.parse(userStr);
+                setUser(parsedUser);
+            } catch (e) {
+                console.error('Error parsing user', e);
+            }
+        }
         fetchInitialData();
     }, []);
 
@@ -89,18 +103,28 @@ export default function RulesPage() {
 
                 // CRITICAL: Remove fields not in Prisma schema to avoid "Unknown argument" error
                 delete payload.maxTimeMinutes;
+
+                // New Field
+                payload.penaltyPerMinuteUsd = formData.penaltyPerMinuteUsd;
             }
 
             if (activeTab === 'stops') {
-                // CRITICAL: Remove fields not in Prisma schema
-                delete payload.minDwellTimeMinutes;
+                // Ensure minDwellTimeMinutes is int
+                if (formData.minDwellTimeMinutes) {
+                    payload.minDwellTimeMinutes = parseInt(formData.minDwellTimeMinutes);
+                }
                 // Ensure maxDwellMinutes is int
                 payload.maxDwellMinutes = parseInt(formData.maxDwellMinutes);
+
+                // New Field
+                payload.penaltyPerMinuteUsd = formData.penaltyPerMinuteUsd;
             }
 
             // Map frontend naming to backend naming if needed (speed zones)
             if (activeTab === 'speed') {
                 payload.geofenceId = formData.traccarGeofenceId || formData.geofenceId;
+                // New Field
+                payload.penaltyPerKmhUsd = formData.penaltyPerKmhUsd;
             }
 
             console.log('Sending Rule Payload (Sanitized):', payload); // Debug log
@@ -146,13 +170,15 @@ export default function RulesPage() {
                     <h1 className="text-3xl font-bold text-white mb-2">Configuración de Reglas</h1>
                     <p className="text-slate-400">Define reglas de infracciones para tu flota</p>
                 </div>
-                <button
-                    onClick={() => handleOpenModal()}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-emerald-900/20"
-                >
-                    <Plus size={20} />
-                    Nueva Regla
-                </button>
+                {hasPermission(user, PERMISSIONS.MANAGE_RULES) && (
+                    <button
+                        onClick={() => handleOpenModal()}
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-emerald-900/20"
+                    >
+                        <Plus size={20} />
+                        Nueva Regla
+                    </button>
+                )}
             </div>
 
             {/* Tabs */}
@@ -202,14 +228,16 @@ export default function RulesPage() {
                                                 <span className="ml-2 text-emerald-400">• Multa: ${Number(rule.fineAmountUsd).toFixed(2)}</span>
                                             </div>
                                         </div>
-                                        <div className="flex gap-2">
-                                            <button onClick={() => handleOpenModal(rule)} className="p-2 text-slate-400 hover:text-primary-400 transition-colors">
-                                                <Edit2 size={18} />
-                                            </button>
-                                            <button onClick={() => handleDelete(rule.id)} className="p-2 text-slate-400 hover:text-red-400 transition-colors">
-                                                <Trash2 size={18} />
-                                            </button>
-                                        </div>
+                                        {hasPermission(user, PERMISSIONS.MANAGE_RULES) && (
+                                            <div className="flex gap-2">
+                                                <button onClick={() => handleOpenModal(rule)} className="p-2 text-slate-400 hover:text-primary-400 transition-colors">
+                                                    <Edit2 size={18} />
+                                                </button>
+                                                <button onClick={() => handleDelete(rule.id)} className="p-2 text-slate-400 hover:text-red-400 transition-colors">
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
@@ -217,9 +245,11 @@ export default function RulesPage() {
                             <div className="text-center py-12 text-slate-500">
                                 No hay reglas de segmentos configuradas.
                                 <br />
-                                <button onClick={() => handleOpenModal()} className="text-primary-400 hover:text-primary-300 mt-4 font-medium">
-                                    Crear primera regla
-                                </button>
+                                {hasPermission(user, PERMISSIONS.MANAGE_RULES) && (
+                                    <button onClick={() => handleOpenModal()} className="text-primary-400 hover:text-primary-300 mt-4 font-medium">
+                                        Crear primera regla
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>
@@ -248,14 +278,16 @@ export default function RulesPage() {
                                                 <span className="ml-2 text-emerald-400">• Multa: ${Number(rule.fineAmountUsd).toFixed(2)}</span>
                                             </div>
                                         </div>
-                                        <div className="flex gap-2">
-                                            <button onClick={() => handleOpenModal(rule)} className="p-2 text-slate-400 hover:text-primary-400 transition-colors">
-                                                <Edit2 size={18} />
-                                            </button>
-                                            <button onClick={() => handleDelete(rule.id)} className="p-2 text-slate-400 hover:text-red-400 transition-colors">
-                                                <Trash2 size={18} />
-                                            </button>
-                                        </div>
+                                        {hasPermission(user, PERMISSIONS.MANAGE_RULES) && (
+                                            <div className="flex gap-2">
+                                                <button onClick={() => handleOpenModal(rule)} className="p-2 text-slate-400 hover:text-primary-400 transition-colors">
+                                                    <Edit2 size={18} />
+                                                </button>
+                                                <button onClick={() => handleDelete(rule.id)} className="p-2 text-slate-400 hover:text-red-400 transition-colors">
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
@@ -263,9 +295,11 @@ export default function RulesPage() {
                             <div className="text-center py-12 text-slate-500">
                                 No hay reglas de paradas configuradas.
                                 <br />
-                                <button onClick={() => handleOpenModal()} className="text-primary-400 hover:text-primary-300 mt-4 font-medium">
-                                    Crear primera regla
-                                </button>
+                                {hasPermission(user, PERMISSIONS.MANAGE_RULES) && (
+                                    <button onClick={() => handleOpenModal()} className="text-primary-400 hover:text-primary-300 mt-4 font-medium">
+                                        Crear primera regla
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>
@@ -294,14 +328,16 @@ export default function RulesPage() {
                                                 <span className="ml-2 text-emerald-400">• Multa: ${Number(zone.fineAmountUsd).toFixed(2)}</span>
                                             </div>
                                         </div>
-                                        <div className="flex gap-2">
-                                            <button onClick={() => handleOpenModal(zone)} className="p-2 text-slate-400 hover:text-primary-400 transition-colors">
-                                                <Edit2 size={18} />
-                                            </button>
-                                            <button onClick={() => handleDelete(zone.id)} className="p-2 text-slate-400 hover:text-red-400 transition-colors">
-                                                <Trash2 size={18} />
-                                            </button>
-                                        </div>
+                                        {hasPermission(user, PERMISSIONS.MANAGE_RULES) && (
+                                            <div className="flex gap-2">
+                                                <button onClick={() => handleOpenModal(zone)} className="p-2 text-slate-400 hover:text-primary-400 transition-colors">
+                                                    <Edit2 size={18} />
+                                                </button>
+                                                <button onClick={() => handleDelete(zone.id)} className="p-2 text-slate-400 hover:text-red-400 transition-colors">
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
@@ -309,9 +345,11 @@ export default function RulesPage() {
                             <div className="text-center py-12 text-slate-500">
                                 No hay zonas de velocidad configuradas.
                                 <br />
-                                <button onClick={() => handleOpenModal()} className="text-primary-400 hover:text-primary-300 mt-4 font-medium">
-                                    Crear primera zona
-                                </button>
+                                {hasPermission(user, PERMISSIONS.MANAGE_RULES) && (
+                                    <button onClick={() => handleOpenModal()} className="text-primary-400 hover:text-primary-300 mt-4 font-medium">
+                                        Crear primera zona
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>
@@ -376,6 +414,21 @@ export default function RulesPage() {
                                     />
                                 </div>
                             </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">Multa Adicional por Minuto (USD)</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-3 text-slate-400">$</span>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full pl-8 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
+                                        value={formData.penaltyPerMinuteUsd}
+                                        onChange={(e) => setFormData({ ...formData, penaltyPerMinuteUsd: parseFloat(e.target.value) })}
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                                <p className="text-xs text-slate-500 mt-1">Se sumará al valor base por cada minuto de exceso.</p>
+                            </div>
                         </>
                     )}
 
@@ -427,6 +480,21 @@ export default function RulesPage() {
                                         required
                                     />
                                 </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">Multa Adicional por Minuto (USD)</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-3 text-slate-400">$</span>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full pl-8 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
+                                        value={formData.penaltyPerMinuteUsd}
+                                        onChange={(e) => setFormData({ ...formData, penaltyPerMinuteUsd: parseFloat(e.target.value) })}
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                                <p className="text-xs text-slate-500 mt-1">Se sumará al valor base por cada minuto de exceso o adelanto.</p>
                             </div>
                         </>
                     )}
@@ -492,6 +560,21 @@ export default function RulesPage() {
                                     />
                                 </div>
                             </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">Multa Adicional por km/h (USD)</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-3 text-slate-400">$</span>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full pl-8 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
+                                        value={formData.penaltyPerKmhUsd}
+                                        onChange={(e) => setFormData({ ...formData, penaltyPerKmhUsd: parseFloat(e.target.value) })}
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                                <p className="text-xs text-slate-500 mt-1">Se sumará al valor base por cada km/h de exceso.</p>
+                            </div>
                         </>
                     )}
 
@@ -505,4 +588,3 @@ export default function RulesPage() {
         </div>
     );
 }
-

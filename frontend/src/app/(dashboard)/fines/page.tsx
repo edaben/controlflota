@@ -4,12 +4,26 @@ import React, { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import { FileText, DollarSign, Calendar, Car, Send } from 'lucide-react';
 
+import { PERMISSIONS } from '@/constants/permissions';
+import { hasPermission } from '@/utils/permissions';
+
 export default function FinesPage() {
     const [fines, setFines] = useState([]);
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
 
+    const [user, setUser] = useState<any>(null);
+
     useEffect(() => {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+            try {
+                const parsedUser = JSON.parse(userStr);
+                setUser(parsedUser);
+            } catch (e) {
+                console.error('Error parsing user', e);
+            }
+        }
         fetchFines();
     }, []);
 
@@ -68,16 +82,18 @@ export default function FinesPage() {
                     <h1 className="text-3xl font-bold text-white mb-2">Gestión de Multas</h1>
                     <p className="text-slate-400">Control de multas generadas y pagos</p>
                 </div>
-                <div className="flex gap-3">
-                    <button
-                        onClick={handleSendReminders}
-                        disabled={sending}
-                        className={`bg-slate-800 hover:bg-slate-700 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all border border-slate-700 ${sending ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                        <Send size={20} className={sending ? 'animate-pulse' : ''} />
-                        {sending ? 'Enviando...' : 'Enviar Recordatorios'}
-                    </button>
-                </div>
+                {hasPermission(user, PERMISSIONS.MANAGE_FINES) && (
+                    <div className="flex gap-3">
+                        <button
+                            onClick={handleSendReminders}
+                            disabled={sending}
+                            className={`bg-slate-800 hover:bg-slate-700 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all border border-slate-700 ${sending ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                            <Send size={20} className={sending ? 'animate-pulse' : ''} />
+                            {sending ? 'Enviando...' : 'Enviar Recordatorios'}
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Stats Cards */}

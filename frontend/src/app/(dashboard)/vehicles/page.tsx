@@ -16,6 +16,9 @@ interface Vehicle {
     route?: { name: string };
 }
 
+import { PERMISSIONS } from '@/constants/permissions';
+import { hasPermission } from '@/utils/permissions';
+
 export default function VehiclesPage() {
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
     const [loading, setLoading] = useState(true);
@@ -29,7 +32,18 @@ export default function VehiclesPage() {
         active: true
     });
 
+    const [user, setUser] = useState<any>(null);
+
     useEffect(() => {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+            try {
+                const parsedUser = JSON.parse(userStr);
+                setUser(parsedUser);
+            } catch (e) {
+                console.error('Error parsing user', e);
+            }
+        }
         fetchVehicles();
     }, []);
 
@@ -114,13 +128,15 @@ export default function VehiclesPage() {
                     <h1 className="text-3xl font-bold text-white mb-2">Gestión de Vehículos</h1>
                     <p className="text-slate-400">Control de flota y asignación de rutas</p>
                 </div>
-                <button
-                    onClick={() => handleOpenModal()}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-emerald-900/20"
-                >
-                    <Plus size={20} />
-                    Agregar Vehículo
-                </button>
+                {hasPermission(user, PERMISSIONS.MANAGE_VEHICLES) && (
+                    <button
+                        onClick={() => handleOpenModal()}
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-emerald-900/20"
+                    >
+                        <Plus size={20} />
+                        Agregar Vehículo
+                    </button>
+                )}
             </div>
 
             <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
@@ -165,22 +181,24 @@ export default function VehiclesPage() {
                                     <div className={`w-2 h-2 rounded-full ${v.active ? 'bg-emerald-500' : 'bg-red-500'} inline-block mr-2`}></div>
                                     <span className="text-sm text-slate-300">{v.active ? 'Activo' : 'Inactivo'}</span>
                                 </td>
-                                <td className="px-6 py-4 text-right space-x-2">
-                                    <button
-                                        onClick={() => handleOpenModal(v)}
-                                        className="text-primary-400 hover:text-primary-300 text-sm font-medium inline-flex items-center gap-1"
-                                    >
-                                        <Edit size={14} />
-                                        Editar
-                                    </button>
-                                    <button
-                                        onClick={() => handleDelete(v.id)}
-                                        className="text-red-400 hover:text-red-300 text-sm font-medium inline-flex items-center gap-1"
-                                    >
-                                        <Trash2 size={14} />
-                                        Eliminar
-                                    </button>
-                                </td>
+                                {hasPermission(user, PERMISSIONS.MANAGE_VEHICLES) && (
+                                    <td className="px-6 py-4 text-right space-x-2">
+                                        <button
+                                            onClick={() => handleOpenModal(v)}
+                                            className="text-primary-400 hover:text-primary-300 text-sm font-medium inline-flex items-center gap-1"
+                                        >
+                                            <Edit size={14} />
+                                            Editar
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(v.id)}
+                                            className="text-red-400 hover:text-red-300 text-sm font-medium inline-flex items-center gap-1"
+                                        >
+                                            <Trash2 size={14} />
+                                            Eliminar
+                                        </button>
+                                    </td>
+                                )}
                             </tr>
                         ))}
                         {vehicles.length === 0 && !loading && (

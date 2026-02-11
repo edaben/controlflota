@@ -7,6 +7,7 @@ import webhookRoutes from './routes/webhook.routes';
 import entityRoutes from './routes/entities.routes';
 import ruleRoutes from './routes/rules.routes';
 import reportRoutes from './routes/reports.routes';
+import stopRoutes from './routes/stops.routes';
 import { SchedulerService } from './services/scheduler.service';
 
 dotenv.config();
@@ -24,6 +25,7 @@ app.use('/api/webhook', webhookRoutes); // Mover antes para evitar interferencia
 app.use('/api', entityRoutes);
 app.use('/api', ruleRoutes);
 app.use('/api', reportRoutes);
+app.use('/api', stopRoutes);
 
 // Initialize Scheduler
 SchedulerService.init();

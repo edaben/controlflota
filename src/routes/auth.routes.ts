@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { comparePassword, generateToken } from '../utils/auth';
+import { authenticate, AuthRequest } from '../middleware/auth.middleware';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -27,6 +28,7 @@ router.post('/login', async (req: Request, res: Response) => {
             id: user.id,
             email: user.email,
             role: user.role,
+            permissions: user.permissions,
             tenantId: user.tenantId
         });
 
@@ -38,12 +40,66 @@ router.post('/login', async (req: Request, res: Response) => {
                 id: user.id,
                 email: user.email,
                 role: user.role,
+                name: user.name,
+                phone: user.phone,
+                avatarUrl: user.avatarUrl,
+                permissions: user.permissions,
                 tenantId: user.tenantId,
                 tenantName: user.tenant?.name
             }
         });
     } catch (error) {
         console.error('💥 Login error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// GET /api/auth/me
+router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: req.user?.id },
+            include: { tenant: { select: { name: true } } }
+        });
+
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        res.json({
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            name: user.name,
+            phone: user.phone,
+            avatarUrl: user.avatarUrl,
+            permissions: user.permissions,
+            tenantId: user.tenantId,
+            tenantName: user.tenant?.name
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// PUT /api/auth/profile
+router.put('/profile', authenticate, async (req: AuthRequest, res: Response) => {
+    const { name, phone, avatarUrl } = req.body;
+    try {
+        const user = await prisma.user.update({
+            where: { id: req.user?.id },
+            data: { name, phone, avatarUrl }
+        });
+
+        res.json({
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            name: user.name,
+            phone: user.phone,
+            avatarUrl: user.avatarUrl,
+            permissions: user.permissions,
+            tenantId: user.tenantId
+        });
+    } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
     }
 });

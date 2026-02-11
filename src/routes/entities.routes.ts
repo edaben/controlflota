@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { AuthRequest, authenticate, tenantMiddleware } from '../middleware/auth.middleware';
+import { AuthRequest, authorize, authenticate, tenantMiddleware } from '../middleware/auth.middleware';
+import { PERMISSIONS } from '../constants/permissions';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -21,7 +22,7 @@ router.get('/vehicles', async (req: AuthRequest, res: Response) => {
     res.json(response);
 });
 
-router.post('/vehicles', async (req: AuthRequest, res: Response) => {
+router.post('/vehicles', authorize([], [PERMISSIONS.MANAGE_VEHICLES]), async (req: AuthRequest, res: Response) => {
     const { plate, traccarDeviceId, internalCode } = req.body;
     try {
         const vehicle = await prisma.vehicle.create({
@@ -38,7 +39,7 @@ router.post('/vehicles', async (req: AuthRequest, res: Response) => {
     }
 });
 
-router.put('/vehicles/:id', async (req: AuthRequest, res: Response) => {
+router.put('/vehicles/:id', authorize([], [PERMISSIONS.MANAGE_VEHICLES]), async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const { plate, traccarDeviceId, internalCode } = req.body;
     try {
@@ -59,7 +60,7 @@ router.put('/vehicles/:id', async (req: AuthRequest, res: Response) => {
     }
 });
 
-router.delete('/vehicles/:id', async (req: AuthRequest, res: Response) => {
+router.delete('/vehicles/:id', authorize([], [PERMISSIONS.MANAGE_VEHICLES]), async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     try {
         await prisma.vehicle.delete({
@@ -83,7 +84,7 @@ router.get('/routes', async (req: AuthRequest, res: Response) => {
     res.json(routes);
 });
 
-router.post('/routes', async (req: AuthRequest, res: Response) => {
+router.post('/routes', authorize([], [PERMISSIONS.MANAGE_ROUTES]), async (req: AuthRequest, res: Response) => {
     const { name, code, description } = req.body;
     const route = await prisma.route.create({
         data: {
@@ -96,30 +97,66 @@ router.post('/routes', async (req: AuthRequest, res: Response) => {
     res.status(201).json(route);
 });
 
+router.delete('/routes/:id', authorize([], [PERMISSIONS.MANAGE_ROUTES]), async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const tenantId = req.user?.tenantId as string;
+
+    try {
+        await prisma.$transaction(async (tx) => {
+            // 1. Delete associated Rules (SegmentRule, SpeedZone)
+            await tx.segmentRule.deleteMany({ where: { tenantId, routeId: id } });
+            await tx.speedZone.deleteMany({ where: { tenantId, routeId: id } });
+
+            // 2. Find all Stops for this route to delete their dependencies
+            const stops = await tx.stop.findMany({ where: { tenantId, routeId: id }, select: { id: true } });
+            const stopIds = stops.map(s => s.id);
+
+            if (stopIds.length > 0) {
+                // Delete Stop dependencies
+                await tx.stopRule.deleteMany({ where: { tenantId, stopId: { in: stopIds } } });
+                await tx.stopArrival.deleteMany({ where: { tenantId, stopId: { in: stopIds } } });
+
+                // Delete Stops
+                await tx.stop.deleteMany({ where: { tenantId, routeId: id } });
+            }
+
+            // 3. Delete the Route
+            await tx.route.delete({ where: { id, tenantId } });
+        });
+        res.status(204).send();
+    } catch (error) {
+        console.error('Error deleting route:', error);
+        res.status(500).json({ error: 'Could not delete route. It might be referenced.' });
+    }
+});
+
 // --- Users ---
 router.get('/users', async (req: AuthRequest, res: Response) => {
     try {
         const users = await prisma.user.findMany({
             where: { tenantId: req.user?.tenantId as string },
-            include: { tenant: true },
+            // include removed as it conflicts with select
             select: {
                 id: true,
                 email: true,
                 role: true,
+                permissions: true,
                 tenantId: true,
                 createdAt: true,
                 updatedAt: true,
                 tenant: { select: { name: true } }
             }
-        } as any);
+        });
         res.json(users);
     } catch (error) {
         res.status(500).json({ error: 'Could not fetch users' });
     }
 });
 
-router.post('/users', async (req: AuthRequest, res: Response) => {
-    const { email, password, role } = req.body;
+router.post('/users', authorize([], [PERMISSIONS.MANAGE_USERS]), async (req: AuthRequest, res: Response) => {
+    const { email, password, role, permissions } = req.body;
+    console.log('[POST /users] Attempting to create user:', { email, role, tenantId: req.user?.tenantId });
+
     try {
         const bcrypt = require('bcrypt');
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -129,32 +166,36 @@ router.post('/users', async (req: AuthRequest, res: Response) => {
                 email,
                 password: hashedPassword,
                 role: role || 'CLIENT_USER',
+                permissions: permissions || [],
                 tenantId: req.user?.tenantId as string
             },
             select: {
                 id: true,
                 email: true,
                 role: true,
+                permissions: true,
                 tenantId: true,
                 createdAt: true,
                 updatedAt: true
             }
         });
+        console.log('[POST /users] User created successfully:', user.id);
         res.status(201).json(user);
     } catch (error: any) {
+        console.error('[POST /users] Error creating user:', error);
         if (error.code === 'P2002') {
-            res.status(400).json({ error: 'Email already exists' });
+            res.status(400).json({ error: 'El email ya está registrado' });
         } else {
-            res.status(400).json({ error: 'Could not create user' });
+            res.status(400).json({ error: 'No se pudo crear el usuario', details: error.message });
         }
     }
 });
 
-router.put('/users/:id', async (req: AuthRequest, res: Response) => {
+router.put('/users/:id', authorize([], [PERMISSIONS.MANAGE_USERS]), async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
-    const { email, password, role } = req.body;
+    const { email, password, role, permissions } = req.body;
     try {
-        const updateData: any = { email, role };
+        const updateData: any = { email, role, permissions };
 
         if (password) {
             const bcrypt = require('bcrypt');
@@ -171,6 +212,7 @@ router.put('/users/:id', async (req: AuthRequest, res: Response) => {
                 id: true,
                 email: true,
                 role: true,
+                permissions: true,
                 tenantId: true,
                 createdAt: true,
                 updatedAt: true
@@ -182,7 +224,7 @@ router.put('/users/:id', async (req: AuthRequest, res: Response) => {
     }
 });
 
-router.delete('/users/:id', async (req: AuthRequest, res: Response) => {
+router.delete('/users/:id', authorize([], [PERMISSIONS.MANAGE_USERS]), async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     try {
         await prisma.user.delete({
@@ -198,13 +240,9 @@ router.delete('/users/:id', async (req: AuthRequest, res: Response) => {
 });
 
 // --- Tenants (Solo para SUPER_ADMIN) ---
-router.get('/tenants', async (req: AuthRequest, res: Response) => {
+// Tenants endpoints already protected by specific checks, but authorize() is cleaner
+router.get('/tenants', authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
     try {
-        // Solo SUPER_ADMIN puede ver todos los tenants
-        if (req.user?.role !== 'SUPER_ADMIN') {
-            return res.status(403).json({ error: 'Forbidden' });
-        }
-
         const tenants = await prisma.tenant.findMany({
             include: {
                 _count: {
@@ -218,14 +256,9 @@ router.get('/tenants', async (req: AuthRequest, res: Response) => {
     }
 });
 
-router.post('/tenants', async (req: AuthRequest, res: Response) => {
+router.post('/tenants', authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
     const { name, slug, apiKey } = req.body;
     try {
-        // Solo SUPER_ADMIN puede crear tenants
-        if (req.user?.role !== 'SUPER_ADMIN') {
-            return res.status(403).json({ error: 'Forbidden' });
-        }
-
         const tenant = await prisma.tenant.create({
             data: {
                 name,
@@ -243,15 +276,10 @@ router.post('/tenants', async (req: AuthRequest, res: Response) => {
     }
 });
 
-router.put('/tenants/:id', async (req: AuthRequest, res: Response) => {
+router.put('/tenants/:id', authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const { name, slug, apiKey, active } = req.body;
     try {
-        // Solo SUPER_ADMIN puede actualizar tenants
-        if (req.user?.role !== 'SUPER_ADMIN') {
-            return res.status(403).json({ error: 'Forbidden' });
-        }
-
         const tenant = await prisma.tenant.update({
             where: { id },
             data: { name, slug, apiKey, active }
@@ -262,14 +290,9 @@ router.put('/tenants/:id', async (req: AuthRequest, res: Response) => {
     }
 });
 
-router.delete('/tenants/:id', async (req: AuthRequest, res: Response) => {
+router.delete('/tenants/:id', authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     try {
-        // Solo SUPER_ADMIN puede eliminar tenants
-        if (req.user?.role !== 'SUPER_ADMIN') {
-            return res.status(403).json({ error: 'Forbidden' });
-        }
-
         await prisma.tenant.delete({
             where: { id }
         });
@@ -324,7 +347,8 @@ router.get('/fines', async (req: AuthRequest, res: Response) => {
     }
 });
 
-router.post('/fines/send-reminders', async (req: AuthRequest, res: Response) => {
+// Envia recordatorios - Restricted
+router.post('/fines/send-reminders', authorize([], [PERMISSIONS.MANAGE_FINES]), async (req: AuthRequest, res: Response) => {
     try {
         const tenantId = req.user?.tenantId as string;
         const pendingFines = await prisma.fine.findMany({
@@ -371,7 +395,7 @@ router.get('/segment-rules', async (req: AuthRequest, res: Response) => {
     res.json(rules);
 });
 
-router.post('/segment-rules', async (req: AuthRequest, res: Response) => {
+router.post('/segment-rules', authorize([], [PERMISSIONS.MANAGE_RULES]), async (req: AuthRequest, res: Response) => {
     try {
         const rule = await prisma.segmentRule.create({
             data: { ...req.body, tenantId: req.user?.tenantId as string }
@@ -382,7 +406,7 @@ router.post('/segment-rules', async (req: AuthRequest, res: Response) => {
     }
 });
 
-router.put('/segment-rules/:id', async (req: AuthRequest, res: Response) => {
+router.put('/segment-rules/:id', authorize([], [PERMISSIONS.MANAGE_RULES]), async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     try {
         const rule = await prisma.segmentRule.update({
@@ -395,7 +419,7 @@ router.put('/segment-rules/:id', async (req: AuthRequest, res: Response) => {
     }
 });
 
-router.delete('/segment-rules/:id', async (req: AuthRequest, res: Response) => {
+router.delete('/segment-rules/:id', authorize([], [PERMISSIONS.MANAGE_RULES]), async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     try {
         await prisma.segmentRule.delete({
@@ -416,7 +440,7 @@ router.get('/stop-rules', async (req: AuthRequest, res: Response) => {
     res.json(rules);
 });
 
-router.post('/stop-rules', async (req: AuthRequest, res: Response) => {
+router.post('/stop-rules', authorize([], [PERMISSIONS.MANAGE_RULES]), async (req: AuthRequest, res: Response) => {
     try {
         const rule = await prisma.stopRule.create({
             data: { ...req.body, tenantId: req.user?.tenantId as string }
@@ -427,7 +451,7 @@ router.post('/stop-rules', async (req: AuthRequest, res: Response) => {
     }
 });
 
-router.put('/stop-rules/:id', async (req: AuthRequest, res: Response) => {
+router.put('/stop-rules/:id', authorize(['SUPER_ADMIN', 'CLIENT_ADMIN']), async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     try {
         const rule = await prisma.stopRule.update({
@@ -440,7 +464,7 @@ router.put('/stop-rules/:id', async (req: AuthRequest, res: Response) => {
     }
 });
 
-router.delete('/stop-rules/:id', async (req: AuthRequest, res: Response) => {
+router.delete('/stop-rules/:id', authorize(['SUPER_ADMIN', 'CLIENT_ADMIN']), async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     try {
         await prisma.stopRule.delete({
@@ -460,7 +484,7 @@ router.get('/speed-zones', async (req: AuthRequest, res: Response) => {
     res.json(zones);
 });
 
-router.post('/speed-zones', async (req: AuthRequest, res: Response) => {
+router.post('/speed-zones', authorize([], [PERMISSIONS.MANAGE_RULES]), async (req: AuthRequest, res: Response) => {
     try {
         const zone = await prisma.speedZone.create({
             data: { ...req.body, tenantId: req.user?.tenantId as string }
@@ -471,7 +495,7 @@ router.post('/speed-zones', async (req: AuthRequest, res: Response) => {
     }
 });
 
-router.put('/speed-zones/:id', async (req: AuthRequest, res: Response) => {
+router.put('/speed-zones/:id', authorize(['SUPER_ADMIN', 'CLIENT_ADMIN']), async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     try {
         const zone = await prisma.speedZone.update({
@@ -484,7 +508,7 @@ router.put('/speed-zones/:id', async (req: AuthRequest, res: Response) => {
     }
 });
 
-router.delete('/speed-zones/:id', async (req: AuthRequest, res: Response) => {
+router.delete('/speed-zones/:id', authorize(['SUPER_ADMIN', 'CLIENT_ADMIN']), async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     try {
         await prisma.speedZone.delete({
@@ -517,9 +541,8 @@ router.get('/settings/smtp', async (req: AuthRequest, res: Response) => {
     }
 });
 
-router.put('/settings/smtp', async (req: AuthRequest, res: Response) => {
+router.put('/settings/smtp', authorize([], [PERMISSIONS.MANAGE_SETTINGS]), async (req: AuthRequest, res: Response) => {
     try {
-        console.log('Update SMTP request body:', req.body);
         const { smtpHost, smtpPort, smtpUser, smtpPassword, smtpFromEmail, smtpFromName, smtpSecure } = req.body;
 
         // Validación robusta de puerto
@@ -545,8 +568,6 @@ router.put('/settings/smtp', async (req: AuthRequest, res: Response) => {
             updateData.smtpPassword = smtpPassword;
         }
 
-        console.log('Prisma update payload:', updateData);
-
         const tenant = await prisma.tenant.update({
             where: { id: req.user?.tenantId as string },
             data: updateData,
@@ -570,7 +591,7 @@ router.put('/settings/smtp', async (req: AuthRequest, res: Response) => {
     }
 });
 
-router.post('/settings/smtp/test', async (req: AuthRequest, res: Response) => {
+router.post('/settings/smtp/test', authorize([], [PERMISSIONS.MANAGE_SETTINGS]), async (req: AuthRequest, res: Response) => {
     try {
         const { testEmail } = req.body;
         console.log('Testing SMTP for tenant:', req.user?.tenantId);

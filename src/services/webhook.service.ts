@@ -16,13 +16,23 @@ export class WebhookService {
         });
 
         // 1.5 Verificar si el vehículo existe, si no, crearlo automáticamente
-        const traccarId = parseInt(deviceId);
-        console.log(`[Webhook] Processing deviceId: ${deviceId} (Parsed: ${traccarId})`);
+        let traccarId = parseInt(deviceId);
+        console.log(`[Webhook] Processing deviceId raw: '${deviceId}'`);
 
+        // Intento robusto de parseo si viene como objeto o string raro
         if (isNaN(traccarId)) {
-            console.error(`[Webhook] Error: deviceId '${deviceId}' is not a valid number.`);
-            return;
+            // A veces traccar manda cosas raras, intentamos extraer números
+            const numericId = deviceId.toString().replace(/\D/g, '');
+            if (numericId) {
+                traccarId = parseInt(numericId);
+                console.log(`[Webhook] ⚠️ Recovered numeric ID from '${deviceId}': ${traccarId}`);
+            } else {
+                console.error(`[Webhook] ❌ Error: deviceId '${deviceId}' could not be parsed to number.`);
+                return;
+            }
         }
+
+        console.log(`[Webhook] Search/Create Vehicle with traccarId: ${traccarId}`);
 
         let vehicle = await prisma.vehicle.findUnique({
             where: { traccarDeviceId: traccarId }
@@ -145,12 +155,88 @@ export class WebhookService {
 
             // 2. Crear la parada
             try {
+                // Extraer geometría de la geocerca
+                let geofenceType = 'circle';
+                let geofenceRadius = 0;
+                let geofenceCoordinates = null;
+                let stopLat: number | null = null;
+                let stopLng: number | null = null;
+
+                // Traccar suele enviar el área en WKT (Well-Known Text) dentro de 'area' o 'geofence.area'
+                // O a veces envía 'coordinates' como JSON string en 'geofence.coordinates'
+                const area = payload.geofence?.area || payload.additional?.area || '';
+                const rawCoordinates = payload.geofence?.coordinates;
+
+                if (area.startsWith('CIRCLE')) {
+                    geofenceType = 'circle';
+                    const match = area.match(/CIRCLE\s*\(([^)]+)\)/);
+                    if (match) {
+                        // Normalize separators: replace commas with spaces, then split by space
+                        const parts = match[1].replace(/,/g, ' ').trim().split(/\s+/).map(Number);
+
+                        // Expecting: lat, lon, radius (3 parts) OR lat, lon (2 parts, weird)
+                        if (parts.length >= 3) {
+                            stopLat = parts[0];
+                            stopLng = parts[1];
+                            geofenceRadius = parts[2];
+                        } else if (parts.length === 2) {
+                            stopLat = parts[0];
+                            stopLng = parts[1];
+                            geofenceRadius = 100; // Default radius if missing
+                        }
+                    }
+                } else if (area.startsWith('POLYGON')) {
+                    geofenceType = 'polygon';
+                    const match = area.match(/POLYGON\s*\(\(([^)]+)\)\)/);
+                    if (match) {
+                        // "lat1 lon1, lat2 lon2, ..." -> replace commas with nothing if space separated
+                        // Actually better to split by comma first then by space
+                        const rawPoints = match[1].split(',');
+                        const points = rawPoints.map((p: string) => {
+                            const [p1, p2] = p.trim().split(/\s+/).map(Number);
+                            return { lat: p1, lng: p2 };
+                        });
+                        geofenceCoordinates = points as any;
+                        if (points.length > 0) {
+                            stopLat = points[0].lat;
+                            stopLng = points[0].lng;
+                        }
+                    }
+                } else if (rawCoordinates) {
+                    // CASE: Traccar sends "coordinates": "[{'lat':..., 'lng':...}]" (JSON String)
+                    try {
+                        const parsed = typeof rawCoordinates === 'string' ? JSON.parse(rawCoordinates) : rawCoordinates;
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            geofenceType = 'polygon';
+                            geofenceCoordinates = parsed;
+                            // Set center to first point
+                            if (parsed[0].lat && parsed[0].lng) {
+                                stopLat = parsed[0].lat;
+                                stopLng = parsed[0].lng;
+                            }
+                        }
+                    } catch (e) {
+                        console.error('[Webhook] Failed to parse geofence coordinates JSON:', e);
+                    }
+                }
+
+                if (!stopLat && !stopLng && payload.latitude && payload.longitude) {
+                    // Fallback: use event position if geofence center is unknown
+                    stopLat = payload.latitude;
+                    stopLng = payload.longitude;
+                }
+
                 stop = await prisma.stop.create({
                     data: {
                         tenantId,
                         routeId: defaultRoute.id,
                         name: geofenceName,
                         geofenceId: geofenceId,
+                        geofenceType,
+                        geofenceRadius: geofenceRadius > 0 ? geofenceRadius : null,
+                        geofenceCoordinates: geofenceCoordinates || undefined,
+                        latitude: stopLat,
+                        longitude: stopLng,
                         order: 0
                     }
                 });

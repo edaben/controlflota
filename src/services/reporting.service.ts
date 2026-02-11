@@ -95,7 +95,7 @@ export class ReportingService {
         doc.fontSize(12).text('Detalle por Vehículo:', { underline: true });
         doc.moveDown(0.5);
 
-        report.items.forEach((item, index) => {
+        report.items.forEach((item: any, index: number) => {
             doc.fontSize(10).text(`${index + 1}. Multa: $${item.amountUsd.toFixed(2)} - Infracción ID: ${item.infractionId}`);
         });
 
@@ -105,22 +105,43 @@ export class ReportingService {
 
     static async sendEmail(tenantId: string, to: string[], subject: string, html: string, attachments: any[] = []) {
         const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
-        const smtp = (tenant as any) || {
+
+        // Determinar qué configuración usar: Tenant o Sistema (.env)
+        // Usamos la del tenant SOLO si tiene los campos críticos definidos
+        const useTenantSmtp = tenant?.smtpHost && tenant?.smtpUser && tenant?.smtpPassword;
+
+        const smtp = useTenantSmtp ? {
+            host: tenant.smtpHost,
+            port: tenant.smtpPort || 587,
+            user: tenant.smtpUser,
+            pass: tenant.smtpPassword,
+            fromName: tenant.smtpFromName || 'Control Bus',
+            fromEmail: tenant.smtpFromEmail || tenant.smtpUser,
+            secure: tenant.smtpSecure
+        } : {
             host: process.env.SMTP_HOST,
-            port: process.env.SMTP_PORT,
+            port: parseInt(process.env.SMTP_PORT || '587'),
             user: process.env.SMTP_USER,
             pass: process.env.SMTP_PASS,
-            fromName: process.env.SMTP_FROM_NAME,
-            fromEmail: process.env.SMTP_FROM_EMAIL
+            fromName: process.env.SMTP_FROM_NAME || 'Control Bus',
+            fromEmail: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER,
+            secure: process.env.SMTP_SECURE === 'true'
         };
+
+        if (!smtp.host) {
+            throw new Error('SMTP configuration missing (No tenant settings and no system defaults)');
+        }
 
         const transporter = nodemailer.createTransport({
             host: smtp.host,
-            port: smtp.port,
-            secure: smtp.port === 465,
+            port: smtp.port as number,
+            secure: smtp.secure,
             auth: {
-                user: smtp.user,
-                pass: smtp.pass
+                user: smtp.user as string,
+                pass: smtp.pass as string
+            },
+            tls: {
+                rejectUnauthorized: false // Para mayor compatibilidad con servidores locales/privados
             }
         });
 

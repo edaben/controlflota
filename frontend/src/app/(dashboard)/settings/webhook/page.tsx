@@ -1,35 +1,37 @@
 'use client'
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
-import { Webhook, Copy, CheckCircle, Activity, AlertCircle, Mail, Send, Settings as SettingsIcon } from 'lucide-react';
+import { Webhook, Copy, CheckCircle, Activity, AlertCircle, Settings as SettingsIcon, Trash2, MapPin, Zap } from 'lucide-react';
 
 export default function SettingsPage() {
+    const router = useRouter();
     const [webhookUrl, setWebhookUrl] = useState('');
     const [copied, setCopied] = useState(false);
     const [logs, setLogs] = useState([]);
     const [stats, setStats] = useState({ total: 0, today: 0, errors: 0 });
 
-    // SMTP State
-    const [smtpConfig, setSmtpConfig] = useState({
-        smtpHost: '',
-        smtpPort: 587,
-        smtpUser: '',
-        smtpPassword: '',
-        smtpFromEmail: '',
-        smtpFromName: '',
-        smtpSecure: false
-    });
-    const [testEmail, setTestEmail] = useState('');
-    const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
 
     useEffect(() => {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+            try {
+                const user = JSON.parse(userStr);
+                if (user.role === 'CLIENT_USER') {
+                    router.push('/dashboard');
+                    return;
+                }
+            } catch (e) {
+                console.error('Error parsing user', e);
+            }
+        }
         // Get webhook URL from environment or backend
         const baseUrl = window.location.origin.replace('3001', '3000');
         setWebhookUrl(`${baseUrl}/api/webhook/traccar`);
 
         fetchWebhookLogs();
-        fetchSmtpConfig();
     }, []);
 
     const fetchWebhookLogs = async () => {
@@ -37,27 +39,68 @@ export default function SettingsPage() {
             const { data } = await api.get('/webhook/logs?limit=10');
             setLogs(data.logs || []);
             setStats(data.stats || { total: 0, today: 0, errors: 0 });
+
+            if (data.apiKey) {
+                const baseUrl = window.location.origin.replace('3001', '3000');
+                setWebhookUrl(`${baseUrl}/api/webhook/traccar?apiKey=${data.apiKey}`);
+            }
         } catch (err) {
             console.error(err);
         }
     };
 
-    const fetchSmtpConfig = async () => {
+    const handleClearLogs = async () => {
+        if (!confirm('¿Estás seguro de que deseas limpiar todo el historial de eventos recientes? Esta acción no se puede deshacer.')) {
+            return;
+        }
+
         try {
-            const { data } = await api.get('/settings/smtp');
-            setSmtpConfig({
-                smtpHost: data.smtpHost || '',
-                smtpPort: data.smtpPort || 587,
-                smtpUser: data.smtpUser || '',
-                smtpPassword: '',
-                smtpFromEmail: data.smtpFromEmail || '',
-                smtpFromName: data.smtpFromName || '',
-                smtpSecure: data.smtpSecure || false
-            });
+            await api.delete('/webhook/logs');
+            setLogs([]);
+            setStats(prev => ({ ...prev, total: 0, today: 0 }));
+            alert('Historial limpiado correctamente');
         } catch (err) {
-            console.error(err);
+            console.error('Error clearing logs:', err);
+            alert('Error al limpiar el historial');
         }
     };
+
+    const renderEventDetail = (log: any) => {
+        const p = log.payload || {};
+
+        switch (log.eventType) {
+            case 'geofenceEnter':
+            case 'geofenceExit':
+                const geoName = p.geofence?.name || p.additional?.geofence || 'Geocerca desconocida';
+                return (
+                    <span className="flex items-center gap-1.5 text-blue-400">
+                        <MapPin size={12} />
+                        {geoName}
+                    </span>
+                );
+            case 'deviceOverspeed':
+                const speedKmh = p.speed ? Math.round(p.speed * 1.852) : 0;
+                return (
+                    <span className="flex items-center gap-1.5 text-orange-400">
+                        <Zap size={12} />
+                        {speedKmh} km/h
+                    </span>
+                );
+            case 'ignitionOn':
+            case 'ignitionOff':
+                return (
+                    <span className="text-slate-400">Vehículo {log.eventType === 'ignitionOn' ? 'Encendido' : 'Apagado'}</span>
+                );
+            case 'alarm':
+                return (
+                    <span className="text-red-400 animate-pulse">Alarma: {p.alarm || 'Alerta Crítica'}</span>
+                );
+            default:
+                return <span className="text-slate-500 italic">Sin detalles extra</span>;
+        }
+    };
+
+
 
     const copyToClipboard = () => {
         navigator.clipboard.writeText(webhookUrl);
@@ -67,42 +110,7 @@ export default function SettingsPage() {
 
     const [isSaving, setIsSaving] = useState(false);
 
-    const handleSmtpSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsSaving(true);
-        try {
-            await api.put('/settings/smtp', smtpConfig);
-            alert('✅ Configuración SMTP guardada exitosamente');
-            // Limpiar el campo de contraseña en el estado local después de guardar por seguridad
-            setSmtpConfig(prev => ({ ...prev, smtpPassword: '' }));
-        } catch (err: any) {
-            console.error(err);
-            alert('❌ ' + (err.response?.data?.error || 'Error al guardar configuración SMTP'));
-        } finally {
-            setIsSaving(false);
-        }
-    };
 
-    const handleTestEmail = async () => {
-        if (!testEmail) {
-            alert('Por favor ingresa un email de prueba');
-            return;
-        }
-
-        try {
-            const { data } = await api.post('/settings/smtp/test', { testEmail });
-            setTestResult({ success: true, message: data.message });
-            setTimeout(() => setTestResult(null), 5000);
-        } catch (err: any) {
-            const errorMsg = err.response?.data?.error || 'Error al enviar correo de prueba';
-            const details = err.response?.data?.details ? ` (${err.response.data.details})` : '';
-            setTestResult({
-                success: false,
-                message: `${errorMsg}${details}`
-            });
-            setTimeout(() => setTestResult(null), 10000); // 10 seconds for detailed errors
-        }
-    };
 
     return (
         <div className="space-y-8">
@@ -159,161 +167,7 @@ export default function SettingsPage() {
                 </div>
             </div>
 
-            {/* SMTP Configuration Section */}
-            <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20 rounded-2xl p-8">
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center">
-                        <Mail className="text-emerald-400" size={24} />
-                    </div>
-                    <div>
-                        <h3 className="text-xl font-bold text-white">Configuración SMTP</h3>
-                        <p className="text-sm text-slate-400">Configura el servidor de correo para envío de notificaciones</p>
-                    </div>
-                </div>
 
-                <form onSubmit={handleSmtpSubmit} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-2">
-                                Host SMTP
-                            </label>
-                            <input
-                                type="text"
-                                value={smtpConfig.smtpHost}
-                                onChange={(e) => setSmtpConfig({ ...smtpConfig, smtpHost: e.target.value })}
-                                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                placeholder="smtp.gmail.com"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-2">
-                                Puerto
-                            </label>
-                            <input
-                                type="number"
-                                value={smtpConfig.smtpPort}
-                                onChange={(e) => setSmtpConfig({ ...smtpConfig, smtpPort: parseInt(e.target.value) })}
-                                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                placeholder="587"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-2">
-                                Usuario SMTP
-                            </label>
-                            <input
-                                type="text"
-                                value={smtpConfig.smtpUser}
-                                onChange={(e) => setSmtpConfig({ ...smtpConfig, smtpUser: e.target.value })}
-                                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                placeholder="usuario@gmail.com"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-2">
-                                Contraseña SMTP
-                            </label>
-                            <input
-                                type="password"
-                                value={smtpConfig.smtpPassword}
-                                onChange={(e) => setSmtpConfig({ ...smtpConfig, smtpPassword: e.target.value })}
-                                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                placeholder="••••••••"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-2">
-                                Email Remitente
-                            </label>
-                            <input
-                                type="email"
-                                value={smtpConfig.smtpFromEmail}
-                                onChange={(e) => setSmtpConfig({ ...smtpConfig, smtpFromEmail: e.target.value })}
-                                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                placeholder="noreply@tuempresa.com"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-2">
-                                Nombre Remitente
-                            </label>
-                            <input
-                                type="text"
-                                value={smtpConfig.smtpFromName}
-                                onChange={(e) => setSmtpConfig({ ...smtpConfig, smtpFromName: e.target.value })}
-                                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                placeholder="Control Bus"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                        <input
-                            type="checkbox"
-                            id="smtpSecure"
-                            checked={smtpConfig.smtpSecure}
-                            onChange={(e) => setSmtpConfig({ ...smtpConfig, smtpSecure: e.target.checked })}
-                            className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-emerald-600 focus:ring-2 focus:ring-emerald-500"
-                        />
-                        <label htmlFor="smtpSecure" className="text-sm text-slate-300">
-                            Usar SSL/TLS (puerto 465)
-                        </label>
-                    </div>
-
-                    <div className="flex gap-3 pt-4">
-                        <button
-                            type="submit"
-                            disabled={isSaving}
-                            className={`px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold transition-colors flex items-center gap-2 ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                            {isSaving ? (
-                                <>
-                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                    Guardando...
-                                </>
-                            ) : (
-                                'Guardar Configuración'
-                            )}
-                        </button>
-                    </div>
-                </form>
-
-                {/* Test Email Section */}
-                <div className="mt-6 pt-6 border-t border-slate-700/50">
-                    <h4 className="text-white font-semibold mb-4 flex items-center gap-2">
-                        <Send size={16} className="text-emerald-400" />
-                        Probar Configuración
-                    </h4>
-                    <div className="flex gap-3">
-                        <input
-                            type="email"
-                            value={testEmail}
-                            onChange={(e) => setTestEmail(e.target.value)}
-                            className="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                            placeholder="correo@ejemplo.com"
-                        />
-                        <button
-                            onClick={handleTestEmail}
-                            className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
-                        >
-                            Enviar Prueba
-                        </button>
-                    </div>
-                    {testResult && (
-                        <div className={`mt-3 p-3 rounded-lg ${testResult.success
-                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                            : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                            }`}>
-                            {testResult.message}
-                        </div>
-                    )}
-                </div>
-            </div>
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -350,14 +204,24 @@ export default function SettingsPage() {
 
             {/* Recent Events */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-800">
+                <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center">
                     <h3 className="text-lg font-bold text-white">Eventos Recientes del Webhook</h3>
+                    {logs.length > 0 && (
+                        <button
+                            onClick={handleClearLogs}
+                            className="text-red-400 hover:text-red-300 transition-colors flex items-center gap-2 text-sm font-medium"
+                        >
+                            <Trash2 size={16} />
+                            Limpiar Historial
+                        </button>
+                    )}
                 </div>
                 <table className="w-full text-left">
                     <thead>
                         <tr className="bg-slate-800/50 text-slate-400 text-sm">
                             <th className="px-6 py-4 font-medium">Timestamp</th>
                             <th className="px-6 py-4 font-medium">Tipo</th>
+                            <th className="px-6 py-4 font-medium">Detalle</th>
                             <th className="px-6 py-4 font-medium">Device ID</th>
                             <th className="px-6 py-4 font-medium">Estado</th>
                         </tr>
@@ -369,6 +233,9 @@ export default function SettingsPage() {
                                     {new Date(log.timestamp).toLocaleString('es-EC')}
                                 </td>
                                 <td className="px-6 py-4 text-white font-medium">{log.eventType || 'position'}</td>
+                                <td className="px-6 py-4 text-sm">
+                                    {renderEventDetail(log)}
+                                </td>
                                 <td className="px-6 py-4 text-slate-400 font-mono text-sm">{log.deviceId || 'N/A'}</td>
                                 <td className="px-6 py-4">
                                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${log.success

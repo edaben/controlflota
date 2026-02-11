@@ -5,6 +5,9 @@ import api from '@/lib/api';
 import { AlertTriangle, Calendar, Car, MapPin, Filter, X } from 'lucide-react';
 import Modal from '@/components/Modal';
 
+import { PERMISSIONS } from '@/constants/permissions';
+import { hasPermission } from '@/utils/permissions';
+
 export default function InfractionsPage() {
     const [infractions, setInfractions] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -17,7 +20,18 @@ export default function InfractionsPage() {
         status: ''
     });
 
+    const [user, setUser] = useState<any>(null);
+
     useEffect(() => {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+            try {
+                const parsedUser = JSON.parse(userStr);
+                setUser(parsedUser);
+            } catch (e) {
+                console.error('Error parsing user', e);
+            }
+        }
         fetchInfractions();
         fetchVehicles();
     }, []);

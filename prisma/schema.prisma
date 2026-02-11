@@ -56,6 +56,10 @@ model User {
   email     String   @unique
   password  String
   role      Role     @default(CLIENT_USER)
+  permissions String[] @default([])
+  name      String?
+  phone     String?
+  avatarUrl String?
   tenantId  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -106,6 +110,9 @@ model Stop {
   routeId     String
   name        String
   geofenceId  String?  // ID de la geocerca en Traccar
+  geofenceType String? // 'circle', 'polygon', etc.
+  geofenceRadius Float?
+  geofenceCoordinates Json?
   latitude    Float?
   longitude   Float?
   order       Int      @default(0)

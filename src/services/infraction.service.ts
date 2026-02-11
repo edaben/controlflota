@@ -11,12 +11,35 @@ export class InfractionService {
             where: { tenantId, stopId, active: true }
         });
 
-        if (rule && dwellMinutes > rule.maxDwellMinutes) {
-            await this.createInfraction(tenantId, vehicleId, InfractionType.DWELL_TIME, rule.fineAmountUsd, {
-                stopId,
-                dwellMinutes,
-                maxAllowed: rule.maxDwellMinutes
-            });
+        if (rule) {
+            // 1. Check Max Dwell Time (Excessive stop)
+            if (dwellMinutes > rule.maxDwellMinutes) {
+                const excessMinutes = dwellMinutes - rule.maxDwellMinutes;
+                // Calculate dynamic fine: Base + (Excess * PenaltyPerMinute)
+                const dynamicFine = Number(rule.fineAmountUsd) + (excessMinutes * Number(rule.penaltyPerMinuteUsd || 0));
+
+                await this.createInfraction(tenantId, vehicleId, InfractionType.DWELL_TIME, dynamicFine, {
+                    stopId,
+                    dwellMinutes,
+                    maxAllowed: rule.maxDwellMinutes,
+                    excessMinutes
+                });
+            }
+            // 2. Check Min Dwell Time (Too fast / "Correteo" at stop)
+            else if (rule.minDwellTimeMinutes && dwellMinutes < rule.minDwellTimeMinutes) {
+                const earlyMinutes = rule.minDwellTimeMinutes - dwellMinutes;
+                // Use same penalty per minute for being early? Or base fine? 
+                // Suggestion: Base fine + (Early * Penalty)
+                const dynamicFine = Number(rule.fineAmountUsd) + (earlyMinutes * Number(rule.penaltyPerMinuteUsd || 0));
+
+                await this.createInfraction(tenantId, vehicleId, InfractionType.DWELL_TIME, dynamicFine, {
+                    stopId,
+                    dwellMinutes,
+                    minRequired: rule.minDwellTimeMinutes,
+                    earlyMinutes,
+                    subtype: 'MIN_DWELL_VIOLATION'
+                });
+            }
         }
     }
 
@@ -41,9 +64,14 @@ export class InfractionService {
                 const speedKmh = Math.round(currentSpeed * 1.852);
 
                 if (speedKmh > zoneRule.maxSpeedKmh) {
-                    await this.createInfraction(tenantId, vehicleId, InfractionType.OVERSPEED, zoneRule.fineAmountUsd, {
+                    const excessKmh = speedKmh - zoneRule.maxSpeedKmh;
+                    // Calculate dynamic fine: Base + (Excess * PenaltyPerKmh)
+                    const dynamicFine = Number(zoneRule.fineAmountUsd) + (excessKmh * Number(zoneRule.penaltyPerKmhUsd || 0));
+
+                    await this.createInfraction(tenantId, vehicleId, InfractionType.OVERSPEED, dynamicFine, {
                         speedKmh,
                         maxAllowed: zoneRule.maxSpeedKmh,
+                        excessKmh,
                         zoneName: zoneRule.name
                     });
                 }
@@ -81,23 +109,32 @@ export class InfractionService {
         if (rule) {
             const travelMinutes = Math.round((arrivalTime.getTime() - previousArrival.departedAt.getTime()) / 60000);
 
-            // Si excede el máximo permitido
+            // Si excede el máximo permitido (Retraso / "Tortuguismo")
             if (travelMinutes > rule.expectedMaxMinutes) {
-                await this.createInfraction(tenantId, vehicleId, InfractionType.TIME_SEGMENT, rule.fineAmountUsd, {
+                const excessMinutes = travelMinutes - rule.expectedMaxMinutes;
+                const dynamicFine = Number(rule.fineAmountUsd) + (excessMinutes * Number(rule.penaltyPerMinuteUsd || 0));
+
+                await this.createInfraction(tenantId, vehicleId, InfractionType.TIME_SEGMENT, dynamicFine, {
                     fromStopId: rule.fromStopId,
                     toStopId: rule.toStopId,
                     travelMinutes,
-                    maxAllowed: rule.expectedMaxMinutes
+                    maxAllowed: rule.expectedMaxMinutes,
+                    excessMinutes,
+                    subtype: 'MAX_TIME_VIOLATION'
                 });
             }
-            // Opcional: Si es menor que el mínimo permitido (correteos)
+            // Si es menor que el mínimo permitido (Adelanto / "Correteo")
             else if (rule.expectedMinMinutes && travelMinutes < rule.expectedMinMinutes) {
-                await this.createInfraction(tenantId, vehicleId, InfractionType.TIME_SEGMENT, rule.fineAmountUsd, {
+                const earlyMinutes = rule.expectedMinMinutes - travelMinutes;
+                const dynamicFine = Number(rule.fineAmountUsd) + (earlyMinutes * Number(rule.penaltyPerMinuteUsd || 0));
+
+                await this.createInfraction(tenantId, vehicleId, InfractionType.TIME_SEGMENT, dynamicFine, {
                     fromStopId: rule.fromStopId,
                     toStopId: rule.toStopId,
                     travelMinutes,
                     minRequired: rule.expectedMinMinutes,
-                    type: 'MIN_TIME_VIOLATION'
+                    earlyMinutes,
+                    subtype: 'MIN_TIME_VIOLATION'
                 });
             }
         }
