@@ -611,29 +611,12 @@ router.post('/settings/smtp/test', authorize([], [PERMISSIONS.MANAGE_SETTINGS]),
             });
         }
 
-        const nodemailer = require('nodemailer');
-
-        // Configurar el transportista
-        const transporter = nodemailer.createTransport({
-            host: tenant.smtpHost,
-            port: tenant.smtpPort || 587,
-            secure: tenant.smtpSecure,
-            auth: {
-                user: tenant.smtpUser,
-                pass: tenant.smtpPassword
-            },
-            tls: {
-                rejectUnauthorized: false
-            }
-        });
-
-        // Enviar el correo
-        await transporter.sendMail({
-            from: `"${tenant.smtpFromName || 'Control Bus'}" <${tenant.smtpFromEmail || tenant.smtpUser}>`,
-            to: testEmail,
-            subject: "Prueba de Configuración SMTP - Control Bus",
-            text: "Este es un correo de prueba para verificar que la configuración SMTP en Control Bus funciona correctamente.",
-            html: `
+        const { ReportingService } = require('../services/reporting.service');
+        await ReportingService.sendEmail(
+            req.user?.tenantId as string,
+            [testEmail],
+            "Prueba de Configuración SMTP - Control Bus",
+            `
                 <div style="font-family: sans-serif; padding: 20px; color: #333;">
                     <h2 style="color: #10b981;">Prueba de Configuración SMTP</h2>
                     <p>Este es un correo de prueba para verificar que la configuración SMTP en <b>Control Bus</b> funciona correctamente.</p>
@@ -641,7 +624,7 @@ router.post('/settings/smtp/test', authorize([], [PERMISSIONS.MANAGE_SETTINGS]),
                     <p style="font-size: 12px; color: #666;">Enviado desde el panel de administración.</p>
                 </div>
             `
-        });
+        );
 
         res.json({
             success: true,

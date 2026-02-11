@@ -1,6 +1,6 @@
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
-import path from 'fs';
+import path from 'path';
 import nodemailer from 'nodemailer';
 import { PrismaClient } from '@prisma/client';
 
