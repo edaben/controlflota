@@ -99,7 +99,7 @@ export default function RulesPage() {
                     payload.routeId = selectedStop.routeId;
                 }
                 // Backend expects 'expectedMaxMinutes', frontend uses 'maxTimeMinutes'
-                payload.expectedMaxMinutes = formData.maxTimeMinutes;
+                payload.expectedMaxMinutes = formData.maxTimeMinutes || 0;
 
                 // CRITICAL: Remove fields not in Prisma schema to avoid "Unknown argument" error
                 delete payload.maxTimeMinutes;
@@ -114,7 +114,7 @@ export default function RulesPage() {
                     payload.minDwellTimeMinutes = parseInt(formData.minDwellTimeMinutes);
                 }
                 // Ensure maxDwellMinutes is int
-                payload.maxDwellMinutes = parseInt(formData.maxDwellMinutes);
+                payload.maxDwellMinutes = parseInt(formData.maxDwellMinutes) || 0;
 
                 // New Field
                 payload.penaltyPerMinuteUsd = formData.penaltyPerMinuteUsd;
@@ -458,7 +458,7 @@ export default function RulesPage() {
                                         type="number"
                                         className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
                                         value={formData.minDwellTimeMinutes}
-                                        onChange={(e) => setFormData({ ...formData, minDwellTimeMinutes: parseInt(e.target.value) })}
+                                        onChange={(e) => setFormData({ ...formData, minDwellTimeMinutes: parseInt(e.target.value) || 0 })}
                                     />
                                 </div>
                                 <div>
@@ -466,8 +466,8 @@ export default function RulesPage() {
                                     <input
                                         type="number"
                                         className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
-                                        value={formData.maxDwellMinutes}
-                                        onChange={(e) => setFormData({ ...formData, maxDwellMinutes: parseInt(e.target.value) })}
+                                        value={formData.maxDwellMinutes || 0}
+                                        onChange={(e) => setFormData({ ...formData, maxDwellMinutes: parseInt(e.target.value) || 0 })}
                                     />
                                 </div>
                             </div>
@@ -494,8 +494,8 @@ export default function RulesPage() {
                                         type="number"
                                         step="0.01"
                                         className="w-full pl-8 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
-                                        value={formData.penaltyPerMinuteUsd}
-                                        onChange={(e) => setFormData({ ...formData, penaltyPerMinuteUsd: parseFloat(e.target.value) })}
+                                        value={formData.penaltyPerMinuteUsd || 0}
+                                        onChange={(e) => setFormData({ ...formData, penaltyPerMinuteUsd: parseFloat(e.target.value) || 0 })}
                                         placeholder="0.00"
                                     />
                                 </div>
@@ -570,8 +570,8 @@ export default function RulesPage() {
                                         type="number"
                                         step="0.01"
                                         className="w-full pl-8 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
-                                        value={formData.penaltyPerKmhUsd}
-                                        onChange={(e) => setFormData({ ...formData, penaltyPerKmhUsd: parseFloat(e.target.value) })}
+                                        value={formData.penaltyPerKmhUsd || 0}
+                                        onChange={(e) => setFormData({ ...formData, penaltyPerKmhUsd: parseFloat(e.target.value) || 0 })}
                                         placeholder="0.00"
                                     />
                                 </div>
