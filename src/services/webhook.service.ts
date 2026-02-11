@@ -221,22 +221,27 @@ export class WebhookService {
         const area = geofence.area || '';
 
         if (area.toUpperCase().startsWith('CIRCLE')) {
-            const match = area.match(/CIRCLE\s*\(([^)]+)\)/i);
+            // CIRCLE (longitude latitude, radius)
+            const match = area.match(/CIRCLE\s*\(\s*([^,]+),\s*([^)]+)\)/i) || area.match(/CIRCLE\s*\(([^)]+)\)/i);
             if (match) {
-                const parts = match[1].replace(/,/g, ' ').trim().split(/\s+/).map(Number);
+                // Handle both "CIRCLE(lon lat, rad)" and "CIRCLE(lon, lat, rad)" formats
+                const cleanContent = match[1].replace(/,/g, ' ').trim();
+                const parts = cleanContent.split(/\s+/).map(Number);
+
                 if (parts.length >= 3) {
-                    stopLat = parts[0];
-                    stopLng = parts[1];
+                    stopLat = parts[1]; // Latitude is the second part in WKT-like
+                    stopLng = parts[0]; // Longitude is the first part in WKT-like
                     geofenceRadius = parts[2];
                 }
             }
         } else if (area.toUpperCase().startsWith('POLYGON')) {
             geofenceType = 'polygon';
-            const match = area.match(/POLYGON\s*\(\(([^)]+)\)\)/i);
+            // POLYGON ((lon lat, lon lat, ...))
+            const match = area.match(/POLYGON\s*\(\s*\(\s*([^)]+)\s*\)\s*\)/i);
             if (match) {
                 const points = match[1].split(',').map((p: string) => {
-                    const [lat, lng] = p.trim().split(/\s+/).map(Number);
-                    return { lat, lng };
+                    const coords = p.trim().split(/\s+/).map(Number);
+                    return { lat: coords[1], lng: coords[0] }; // Map LON LAT to LAT LNG
                 });
                 geofenceCoordinates = points;
                 if (points.length > 0) {

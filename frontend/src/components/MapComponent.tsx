@@ -26,8 +26,22 @@ function MapUpdater({ center, stops }: { center?: [number, number], stops: any[]
 
     useEffect(() => {
         if (stops.length > 0) {
-            const bounds = L.latLngBounds(stops.map(s => [s.latitude || 0, s.longitude || 0]));
-            map.fitBounds(bounds, { padding: [50, 50] });
+            const allPoints: [number, number][] = [];
+            stops.forEach(s => {
+                if (s.latitude && s.longitude) {
+                    allPoints.push([s.latitude, s.longitude]);
+                }
+                if (s.geofenceType === 'polygon' && Array.isArray(s.geofenceCoordinates)) {
+                    s.geofenceCoordinates.forEach((p: any) => {
+                        if (p.lat && p.lng) allPoints.push([p.lat, p.lng]);
+                    });
+                }
+            });
+
+            if (allPoints.length > 0) {
+                const bounds = L.latLngBounds(allPoints);
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
         } else if (center) {
             map.setView(center);
         }
