@@ -77,7 +77,7 @@ export default function RulesPage() {
             } else if (activeTab === 'stops') {
                 setFormData({ stopId: '', maxDwellMinutes: 5, fineAmountUsd: 0 });
             } else if (activeTab === 'speed') {
-                setFormData({ name: '', routeId: '', traccarGeofenceId: '', maxSpeedKmh: 60, fineAmountUsd: 0 });
+                setFormData({ name: '', stopId: '', geofenceId: '', maxSpeedKmh: 60, fineAmountUsd: 0, penaltyPerKmhUsd: 0 });
             }
         }
         setShowModal(true);
@@ -125,6 +125,9 @@ export default function RulesPage() {
                 payload.geofenceId = formData.traccarGeofenceId || formData.geofenceId;
                 // New Field
                 payload.penaltyPerKmhUsd = formData.penaltyPerKmhUsd;
+
+                // CLEANUP: Remove fields that don't exist in Prisma model
+                delete payload.traccarGeofenceId;
             }
 
             console.log('Sending Rule Payload (Sanitized):', payload); // Debug log
