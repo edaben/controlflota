@@ -40,7 +40,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${API_URL:-http://localhost:3000/api}
+        - NEXT_PUBLIC_API_URL=https://cbus.rastroseguro.com/api
     container_name: control-bus-frontend
     # No exponemos el puerto directo al mundo, pasamos por nginx
     # ports:
