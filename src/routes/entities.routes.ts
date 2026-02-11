@@ -568,8 +568,17 @@ router.put('/settings/smtp', authorize([], [PERMISSIONS.MANAGE_SETTINGS]), async
             updateData.smtpPassword = smtpPassword;
         }
 
+        const tenantId = req.user?.tenantId;
+
+        if (!tenantId) {
+            return res.status(400).json({
+                error: 'Contexto de empresa no encontrado',
+                details: 'Tu usuario no tiene una empresa (Tenant) asignada. Por favor, contacta al soporte.'
+            });
+        }
+
         const tenant = await prisma.tenant.update({
-            where: { id: req.user?.tenantId as string },
+            where: { id: tenantId as string },
             data: updateData,
             select: {
                 smtpHost: true,
