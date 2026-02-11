@@ -125,34 +125,48 @@ router.get('/speed-zones', async (req: AuthRequest, res: Response) => {
 });
 
 router.post('/speed-zones', async (req: AuthRequest, res: Response) => {
+    console.log('[SpeedZones] 📥 Creating new speed zone:', JSON.stringify(req.body));
     const { name, routeId, stopId, geofenceId, maxSpeedKmh, fineAmountUsd, penaltyPerKmhUsd } = req.body;
-    try {
-        let finalGeofenceId = geofenceId;
 
-        // Si se provee stopId, intentar obtener el geofenceId de la parada
-        if (stopId && !finalGeofenceId) {
-            const stop = await prisma.stop.findUnique({ where: { id: stopId } });
-            if (stop?.geofenceId) {
-                finalGeofenceId = stop.geofenceId;
+    try {
+        let finalGeofenceId = (geofenceId || '').toString().trim() || null;
+        let finalStopId = (stopId || '').toString().trim() || null;
+        let finalRouteId = (routeId || '').toString().trim() || null;
+
+        // Si se provee stopId, intentar obtener el geofenceId de la parada si no hay uno manual
+        if (finalStopId && !finalGeofenceId) {
+            console.log(`[SpeedZones] 🔍 Looking up geofence for stop: ${finalStopId}`);
+            try {
+                const stop = await prisma.stop.findUnique({ where: { id: finalStopId } });
+                if (stop?.geofenceId) {
+                    finalGeofenceId = stop.geofenceId;
+                    console.log(`[SpeedZones] ✅ Found geofenceId from stop: ${finalGeofenceId}`);
+                }
+            } catch (e) {
+                console.error('[SpeedZones] ⚠️ Error looking up stop (non-critical):', e);
             }
         }
+
+        console.log(`[SpeedZones] 💾 Saving to DB: Name=${name}, Geofence=${finalGeofenceId}, Stop=${finalStopId}`);
 
         const zone = await prisma.speedZone.create({
             data: {
                 tenantId: req.user?.tenantId as string,
-                name,
-                routeId: routeId || null,
-                stopId: stopId || null,
+                name: name || 'Nueva Zona',
+                routeId: finalRouteId,
+                stopId: finalStopId,
                 geofenceId: finalGeofenceId,
-                maxSpeedKmh: Number(maxSpeedKmh),
-                fineAmountUsd: Number(fineAmountUsd),
+                maxSpeedKmh: Number(maxSpeedKmh) || 0,
+                fineAmountUsd: Number(fineAmountUsd) || 0,
                 penaltyPerKmhUsd: Number(penaltyPerKmhUsd || 0)
             }
         });
+
+        console.log('[SpeedZones] ✅ Successfully created zone:', zone.id);
         res.status(201).json(zone);
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Error creating speed zone' });
+        console.error('[SpeedZones] ❌ FATAL Error creating speed zone:', error);
+        res.status(500).json({ error: 'Error creating speed zone', details: (error as any).message });
     }
 });
 
