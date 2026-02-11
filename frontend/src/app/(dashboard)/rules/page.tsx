@@ -124,7 +124,7 @@ export default function RulesPage() {
             if (activeTab === 'speed') {
                 payload.geofenceId = formData.traccarGeofenceId || formData.geofenceId;
                 // New Field
-                payload.penaltyPerKmhUsd = formData.penaltyPerKmhUsd;
+                payload.penaltyPerKmhUsd = formData.penaltyPerKmhUsd || 0;
 
                 // CLEANUP: Remove fields that don't exist in Prisma model
                 delete payload.traccarGeofenceId;
@@ -536,16 +536,7 @@ export default function RulesPage() {
                                     required
                                 />
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-300 mb-2">ID Geofence (Traccar)</label>
-                                <input
-                                    type="text"
-                                    className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
-                                    value={formData.geofenceId}
-                                    onChange={(e) => setFormData({ ...formData, geofenceId: e.target.value })}
-                                    placeholder="ID de geocerca en Traccar"
-                                />
-                            </div>
+                            {/* El ID de Geocerca se maneja automáticamente al seleccionar la parada arriba */}
                             <div>
                                 <label className="block text-sm font-medium text-slate-300 mb-2">Velocidad Máxima (km/h)</label>
                                 <input
