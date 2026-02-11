@@ -51,39 +51,54 @@ export class InfractionService {
         // Traccar envía la geocerca en payload.geofence o payload.geofenceId
         const geofenceId = (payload.geofenceId || payload.geofence?.id)?.toString();
 
+        console.log(`[Overspeed] 🔎 Processing Overspeed Check for Vehicle ${vehicleId}. geofenceId: ${geofenceId || 'GLOBAL'}`);
+
+        // Robust speed extraction: Traccar sends it in position.speed or directly in payload.speed
+        const rawSpeed = payload.position?.speed ?? payload.speed ?? 0;
+
+        // Traccar normaliza a nudos (knots) en el core. 1 knot = 1.852 km/h
+        const speedKmh = Math.round(rawSpeed * 1.852);
+
+        // 1. Buscar regla específica para la geocerca si existe
+        let zoneRule = null;
         if (geofenceId) {
-            const zoneRule = await prisma.speedZone.findFirst({
+            zoneRule = await prisma.speedZone.findFirst({
                 where: { tenantId, geofenceId, active: true }
             });
+        }
 
-            if (zoneRule) {
-                // Robust speed extraction: Traccar sends it in position.speed or directly in payload.speed
-                const rawSpeed = payload.position?.speed ?? payload.speed ?? 0;
-
-                // Traccar normaliza a nudos (knots) en el core, pero webhooks pueden variar según config.
-                // Generalmente es nudos. 1 knot = 1.852 km/h
-                const speedKmh = Math.round(rawSpeed * 1.852);
-
-                console.log(`[Overspeed] 🚗 Vehicle: ${vehicleId} | Zone: ${zoneRule.name} | Speed: ${speedKmh} km/h (Raw: ${rawSpeed}) | Max: ${zoneRule.maxSpeedKmh} km/h`);
-
-                if (speedKmh > zoneRule.maxSpeedKmh) {
-                    const excessKmh = speedKmh - zoneRule.maxSpeedKmh;
-                    // Calculate dynamic fine: Base + (Excess * PenaltyPerKmhUsd)
-                    const dynamicFine = Number(zoneRule.fineAmountUsd) + (excessKmh * Number(zoneRule.penaltyPerKmhUsd || 0));
-
-                    console.log(`[Overspeed] 🚨 INFRACTION DETECTED! Speed: ${speedKmh} > ${zoneRule.maxSpeedKmh}. Fine: ${dynamicFine}`);
-
-                    await this.createInfraction(tenantId, vehicleId, InfractionType.OVERSPEED, dynamicFine, {
-                        speedKmh,
-                        maxAllowed: zoneRule.maxSpeedKmh,
-                        excessKmh,
-                        zoneName: zoneRule.name,
-                        rawSpeedKnots: rawSpeed
-                    });
+        // 2. Si no hay regla específica, buscar una regla global (geofenceId: null o vacío)
+        if (!zoneRule) {
+            zoneRule = await prisma.speedZone.findFirst({
+                where: {
+                    tenantId,
+                    OR: [{ geofenceId: null }, { geofenceId: '' }],
+                    active: true
                 }
-            } else {
-                console.log(`[Overspeed] ℹ️ Geofence ${geofenceId} has no active SpeedZone rule.`);
+            });
+        }
+
+        if (zoneRule) {
+            console.log(`[Overspeed] 🚗 Vehicle: ${vehicleId} | Zone: ${zoneRule.name} (RuleId: ${zoneRule.id}) | Speed: ${speedKmh} km/h (Raw: ${rawSpeed}) | Max: ${zoneRule.maxSpeedKmh} km/h`);
+
+            if (speedKmh > zoneRule.maxSpeedKmh) {
+                const excessKmh = speedKmh - zoneRule.maxSpeedKmh;
+                // Calculate dynamic fine: Base + (Excess * PenaltyPerKmhUsd)
+                const dynamicFine = Number(zoneRule.fineAmountUsd) + (excessKmh * Number(zoneRule.penaltyPerKmhUsd || 0));
+
+                console.log(`[Overspeed] 🚨 INFRACTION DETECTED! Speed: ${speedKmh} > ${zoneRule.maxSpeedKmh}. Fine: ${dynamicFine}`);
+
+                await this.createInfraction(tenantId, vehicleId, InfractionType.OVERSPEED, dynamicFine, {
+                    speedKmh,
+                    maxAllowed: zoneRule.maxSpeedKmh,
+                    excessKmh,
+                    zoneName: zoneRule.name,
+                    rawSpeedKnots: rawSpeed,
+                    geofenceId: geofenceId || 'GLOBAL'
+                });
             }
+        } else {
+            console.log(`[Overspeed] ℹ️ No active SpeedZone rule found for Vehicle ${vehicleId} (Geofence: ${geofenceId || 'GLOBAL'}).`);
         }
     }
 
