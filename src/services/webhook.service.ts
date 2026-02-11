@@ -245,7 +245,7 @@ export class WebhookService {
                 const points = contentMatch[1].split(',').map((p: string) => {
                     const coords = p.trim().split(/\s+/).map(Number);
                     return { lat: coords[1], lng: coords[0] }; // LON LAT -> LAT LNG
-                }).filter(p => !isNaN(p.lat) && !isNaN(p.lng));
+                }).filter((p: any) => !isNaN(p.lat) && !isNaN(p.lng));
 
                 if (points.length > 0) {
                     geofenceCoordinates = points;
