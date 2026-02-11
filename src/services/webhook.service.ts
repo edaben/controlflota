@@ -128,6 +128,9 @@ export class WebhookService {
                     arrivedAt: new Date(payload.serverTime || payload.time || new Date())
                 }
             });
+
+            // Detectar exceso de velocidad al entrar
+            await InfractionService.detectOverspeedInfraction(tenantId, vehicle.id, payload);
         } else {
             console.log(`[Webhook] ⚠️ Missing vehicle (${!!vehicle}) or stop (${!!stop}) for event processing.`);
         }
@@ -163,6 +166,9 @@ export class WebhookService {
                 // Disparar detección de dwell time (exceso en parada)
                 await InfractionService.detectDwellTimeInfraction(tenantId, vehicle.id, stop.id, dwellMinutes);
             }
+
+            // Detectar exceso de velocidad al salir
+            await InfractionService.detectOverspeedInfraction(tenantId, vehicle.id, payload);
         }
     }
 
