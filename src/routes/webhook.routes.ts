@@ -72,6 +72,18 @@ router.get('/logs', authenticate, async (req: AuthRequest, res: Response) => {
             select: { apiKey: true }
         });
 
+        const vehicles = await prisma.vehicle.findMany({
+            where: { tenantId: req.user?.tenantId as string },
+            select: { traccarDeviceId: true, plate: true }
+        });
+
+        const vehicleMap: Record<string, string> = {};
+        vehicles.forEach((v: any) => {
+            if (v.traccarDeviceId) {
+                vehicleMap[v.traccarDeviceId.toString()] = v.plate;
+            }
+        });
+
         const logs = await prisma.gpsEvent.findMany({
             where: { tenantId: req.user?.tenantId as string },
             orderBy: { createdAt: 'desc' },
@@ -83,6 +95,7 @@ router.get('/logs', authenticate, async (req: AuthRequest, res: Response) => {
             timestamp: log.createdAt,
             eventType: log.eventType,
             deviceId: log.deviceId,
+            vehiclePlate: vehicleMap[log.deviceId] || 'N/A',
             success: !!log.processedAt,
             payload: log.rawPayload
         }));
@@ -98,7 +111,7 @@ router.get('/logs', authenticate, async (req: AuthRequest, res: Response) => {
                         createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) }
                     }
                 }),
-                errors: 0 // Por ahora no trackeamos errores explícitos en BD
+                errors: 0
             }
         });
     } catch (error) {

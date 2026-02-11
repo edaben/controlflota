@@ -220,6 +220,7 @@ export default function SettingsPage() {
                     <thead>
                         <tr className="bg-slate-800/50 text-slate-400 text-sm">
                             <th className="px-6 py-4 font-medium">Timestamp</th>
+                            <th className="px-6 py-4 font-medium">Vehículo</th>
                             <th className="px-6 py-4 font-medium">Tipo</th>
                             <th className="px-6 py-4 font-medium">Detalle</th>
                             <th className="px-6 py-4 font-medium">Device ID</th>
@@ -231,6 +232,11 @@ export default function SettingsPage() {
                             <tr key={idx} className="hover:bg-slate-800/30 transition-colors">
                                 <td className="px-6 py-4 text-slate-300 text-sm">
                                     {new Date(log.timestamp).toLocaleString('es-EC')}
+                                </td>
+                                <td className="px-6 py-4">
+                                    <span className="bg-slate-800 text-slate-200 px-2 py-1 rounded text-xs font-mono border border-slate-700">
+                                        {log.vehiclePlate || 'N/A'}
+                                    </span>
                                 </td>
                                 <td className="px-6 py-4 text-white font-medium">{log.eventType || 'position'}</td>
                                 <td className="px-6 py-4 text-sm">
