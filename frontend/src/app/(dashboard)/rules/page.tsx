@@ -326,7 +326,7 @@ export default function RulesPage() {
                                     <div key={zone.id} className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 flex justify-between items-center">
                                         <div>
                                             <div className="text-white font-medium">
-                                                {zone.name} {zone.stop ? `(Parada: ${zone.stop.name})` : zone.geofenceId ? `(Geofence: ${zone.geofenceId})` : ''}
+                                                {zone.name} {zone.stop ? `(Parada: ${zone.stop.name})` : zone.geofenceId ? `(Geofence: ${zone.geofenceId})` : '(Global)'}
                                             </div>
                                             <div className="text-sm text-slate-400">
                                                 Límite: {zone.maxSpeedKmh} km/h
@@ -520,10 +520,9 @@ export default function RulesPage() {
                                             geofenceId: selectedStop ? selectedStop.geofenceId : formData.geofenceId
                                         });
                                     }}
-                                    required
                                 >
-                                    <option value="">Seleccionar Geocerca...</option>
-                                    {stops.map((s: any) => <option key={s.id} value={s.id}>{s.name} ({s.geofenceId})</option>)}
+                                    <option value="">Aplicar a Todo el Sistema (Global)</option>
+                                    {stops.map((s: any) => <option key={s.id} value={s.id}>{s.name} ({s.geofenceId || 'Sin ID'})</option>)}
                                 </select>
                             </div>
                             <div>
@@ -545,7 +544,6 @@ export default function RulesPage() {
                                     value={formData.geofenceId}
                                     onChange={(e) => setFormData({ ...formData, geofenceId: e.target.value })}
                                     placeholder="ID de geocerca en Traccar"
-                                    required
                                 />
                             </div>
                             <div>
