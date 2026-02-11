@@ -119,22 +119,34 @@ router.delete('/stop-rules/:id', async (req: AuthRequest, res: Response) => {
 router.get('/speed-zones', async (req: AuthRequest, res: Response) => {
     const zones = await prisma.speedZone.findMany({
         where: { tenantId: req.user?.tenantId as string },
-        include: { route: true }
+        include: { route: true, stop: true }
     });
     res.json(zones);
 });
 
 router.post('/speed-zones', async (req: AuthRequest, res: Response) => {
-    const { name, routeId, geofenceId, maxSpeedKmh, fineAmountUsd } = req.body;
+    const { name, routeId, stopId, geofenceId, maxSpeedKmh, fineAmountUsd, penaltyPerKmhUsd } = req.body;
     try {
+        let finalGeofenceId = geofenceId;
+
+        // Si se provee stopId, intentar obtener el geofenceId de la parada
+        if (stopId && !finalGeofenceId) {
+            const stop = await prisma.stop.findUnique({ where: { id: stopId } });
+            if (stop?.geofenceId) {
+                finalGeofenceId = stop.geofenceId;
+            }
+        }
+
         const zone = await prisma.speedZone.create({
             data: {
                 tenantId: req.user?.tenantId as string,
                 name,
-                routeId, // Ensure routeId is provided from frontend or optional
-                geofenceId, // Maps to traccarGeofenceId in frontend
+                routeId: routeId || null,
+                stopId: stopId || null,
+                geofenceId: finalGeofenceId,
                 maxSpeedKmh: Number(maxSpeedKmh),
-                fineAmountUsd: Number(fineAmountUsd)
+                fineAmountUsd: Number(fineAmountUsd),
+                penaltyPerKmhUsd: Number(penaltyPerKmhUsd || 0)
             }
         });
         res.status(201).json(zone);
@@ -146,18 +158,31 @@ router.post('/speed-zones', async (req: AuthRequest, res: Response) => {
 
 router.put('/speed-zones/:id', async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
-    const { name, maxSpeedKmh, fineAmountUsd } = req.body;
+    const { name, stopId, maxSpeedKmh, fineAmountUsd, penaltyPerKmhUsd, geofenceId } = req.body;
     try {
+        let finalGeofenceId = geofenceId;
+
+        if (stopId && !finalGeofenceId) {
+            const stop = await prisma.stop.findUnique({ where: { id: stopId } });
+            if (stop?.geofenceId) {
+                finalGeofenceId = stop.geofenceId;
+            }
+        }
+
         const zone = await prisma.speedZone.update({
             where: { id },
             data: {
                 name,
+                stopId: stopId || null,
+                geofenceId: finalGeofenceId,
                 maxSpeedKmh: Number(maxSpeedKmh),
-                fineAmountUsd: Number(fineAmountUsd)
+                fineAmountUsd: Number(fineAmountUsd),
+                penaltyPerKmhUsd: Number(penaltyPerKmhUsd || 0)
             }
         });
         res.json(zone);
     } catch (error) {
+        console.error(error);
         res.status(500).json({ error: 'Error updating speed zone' });
     }
 });

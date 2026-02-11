@@ -167,7 +167,8 @@ model StopRule {
 model SpeedZone {
   id            String   @id @default(uuid())
   tenantId      String
-  routeId       String
+  routeId       String?
+  stopId        String?
   name          String
   geofenceId    String?
   maxSpeedKmh   Int
@@ -176,7 +177,8 @@ model SpeedZone {
   active        Boolean  @default(true)
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
-  route  Route  @relation(fields: [routeId], references: [id])
+  route  Route? @relation(fields: [routeId], references: [id])
+  stop   Stop?  @relation(fields: [stopId], references: [id])
 
   @@map("speed_zones")
 }

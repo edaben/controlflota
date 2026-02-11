@@ -322,7 +322,9 @@ export default function RulesPage() {
                                 {speedZones.map((zone: any) => (
                                     <div key={zone.id} className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 flex justify-between items-center">
                                         <div>
-                                            <div className="text-white font-medium">{zone.name} (Geofence: {zone.geofenceId})</div>
+                                            <div className="text-white font-medium">
+                                                {zone.name} {zone.stop ? `(Parada: ${zone.stop.name})` : zone.geofenceId ? `(Geofence: ${zone.geofenceId})` : ''}
+                                            </div>
                                             <div className="text-sm text-slate-400">
                                                 Límite: {zone.maxSpeedKmh} km/h
                                                 <span className="ml-2 text-emerald-400">• Multa: ${Number(zone.fineAmountUsd).toFixed(2)}</span>
@@ -502,6 +504,26 @@ export default function RulesPage() {
                     {activeTab === 'speed' && (
                         <>
                             <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">Geocerca / Parada Asociada</label>
+                                <select
+                                    className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white font-bold text-emerald-400"
+                                    value={formData.stopId}
+                                    onChange={(e) => {
+                                        const selectedStop = stops.find((s: any) => s.id === e.target.value) as any;
+                                        setFormData({
+                                            ...formData,
+                                            stopId: e.target.value,
+                                            name: selectedStop ? `Zona ${selectedStop.name}` : formData.name,
+                                            geofenceId: selectedStop ? selectedStop.geofenceId : formData.geofenceId
+                                        });
+                                    }}
+                                    required
+                                >
+                                    <option value="">Seleccionar Geocerca...</option>
+                                    {stops.map((s: any) => <option key={s.id} value={s.id}>{s.name} ({s.geofenceId})</option>)}
+                                </select>
+                            </div>
+                            <div>
                                 <label className="block text-sm font-medium text-slate-300 mb-2">Nombre de Zona</label>
                                 <input
                                     type="text"
@@ -511,18 +533,6 @@ export default function RulesPage() {
                                     placeholder="Ej: Zona Escolar"
                                     required
                                 />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-300 mb-2">Ruta Asociada</label>
-                                <select
-                                    className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
-                                    value={formData.routeId}
-                                    onChange={(e) => setFormData({ ...formData, routeId: e.target.value })}
-                                    required
-                                >
-                                    <option value="">Seleccionar Ruta...</option>
-                                    {routes.map((r: any) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                                </select>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-300 mb-2">ID Geofence (Traccar)</label>
