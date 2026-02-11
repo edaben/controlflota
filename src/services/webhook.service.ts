@@ -212,43 +212,53 @@ export class WebhookService {
         }
 
         // Extraer geometría
-        let geofenceType = 'circle';
-        let geofenceRadius = 100;
+        let geofenceType: string | null = null;
+        let geofenceRadius: number | null = null;
         let geofenceCoordinates = null;
         let stopLat = payload.latitude || null;
         let stopLng = payload.longitude || null;
 
-        const area = geofence.area || '';
+        const area = (geofence.area || '').trim();
+        console.log(`[Webhook] 🗺️ Parsing Geofence Geometry. Area: "${area}"`);
 
         if (area.toUpperCase().startsWith('CIRCLE')) {
+            geofenceType = 'circle';
             // CIRCLE (longitude latitude, radius)
-            const match = area.match(/CIRCLE\s*\(\s*([^,]+),\s*([^)]+)\)/i) || area.match(/CIRCLE\s*\(([^)]+)\)/i);
-            if (match) {
-                // Handle both "CIRCLE(lon lat, rad)" and "CIRCLE(lon, lat, rad)" formats
-                const cleanContent = match[1].replace(/,/g, ' ').trim();
-                const parts = cleanContent.split(/\s+/).map(Number);
-
-                if (parts.length >= 3) {
-                    stopLat = parts[1]; // Latitude is the second part in WKT-like
-                    stopLng = parts[0]; // Longitude is the first part in WKT-like
-                    geofenceRadius = parts[2];
+            const contentMatch = area.match(/CIRCLE\s*\(([^)]+)\)/i);
+            if (contentMatch) {
+                const inner = contentMatch[1].trim();
+                const partsArr = inner.split(',');
+                if (partsArr.length >= 2) {
+                    const coords = partsArr[0].trim().split(/\s+/).map(Number);
+                    geofenceRadius = Number(partsArr[1].trim());
+                    if (coords.length >= 2) {
+                        stopLng = coords[0];
+                        stopLat = coords[1];
+                    }
                 }
             }
-        } else if (area.toUpperCase().startsWith('POLYGON')) {
+        } else if (area.toUpperCase().includes('POLYGON')) {
             geofenceType = 'polygon';
             // POLYGON ((lon lat, lon lat, ...))
-            const match = area.match(/POLYGON\s*\(\s*\(\s*([^)]+)\s*\)\s*\)/i);
-            if (match) {
-                const points = match[1].split(',').map((p: string) => {
+            const contentMatch = area.match(/POLYGON\s*\(\s*\(\s*([^)]+)\s*\)\s*\)/i) || area.match(/POLYGON\s*\(\s*([^)]+)\s*\)/i);
+            if (contentMatch) {
+                const points = contentMatch[1].split(',').map((p: string) => {
                     const coords = p.trim().split(/\s+/).map(Number);
-                    return { lat: coords[1], lng: coords[0] }; // Map LON LAT to LAT LNG
-                });
-                geofenceCoordinates = points;
+                    return { lat: coords[1], lng: coords[0] }; // LON LAT -> LAT LNG
+                }).filter(p => !isNaN(p.lat) && !isNaN(p.lng));
+
                 if (points.length > 0) {
+                    geofenceCoordinates = points;
                     stopLat = points[0].lat;
                     stopLng = points[0].lng;
                 }
             }
+        }
+
+        // Fallback si no se detectó tipo pero hay geocerca
+        if (!geofenceType) {
+            geofenceType = 'circle';
+            geofenceRadius = 150;
         }
 
         try {
