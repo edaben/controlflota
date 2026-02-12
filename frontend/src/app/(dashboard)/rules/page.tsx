@@ -128,6 +128,14 @@ export default function RulesPage() {
                 payload.fineAmountUsd = parseFloat(formData.fineAmountUsd) || 0;
                 payload.penaltyPerKmhUsd = parseFloat(formData.penaltyPerKmhUsd) || 0;
 
+                // CRITICAL: Convert empty strings to null for backend validation
+                if (payload.stopId === '' || payload.stopId === undefined) {
+                    payload.stopId = null;
+                }
+                if (payload.geofenceId === '' || payload.geofenceId === undefined) {
+                    payload.geofenceId = null;
+                }
+
                 // CLEANUP: Remove fields that don't exist in Prisma model
                 delete payload.traccarGeofenceId;
             }
