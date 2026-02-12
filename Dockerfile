@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM node:20-alpine
 
 RUN apk add --no-cache openssl libc6-compat
 
@@ -12,20 +12,8 @@ RUN npm install
 COPY . .
 
 RUN npx prisma generate
-RUN npm run build
-
-FROM node:20-alpine
-
-RUN apk add --no-cache openssl libc6-compat
-
-WORKDIR /app
-
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/scripts ./scripts
 
 EXPOSE 3000
 
-CMD ["npm", "run", "start"]
+# Use ts-node-dev for hot-reload: auto-restarts when files change
+CMD ["npx", "ts-node-dev", "--respawn", "--transpile-only", "--poll", "src/index.ts"]

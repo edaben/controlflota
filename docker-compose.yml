@@ -34,6 +34,7 @@ services:
       - ./src:/app/src
       - ./prisma:/app/prisma
       - ./scripts:/app/scripts
+      - ./tsconfig.json:/app/tsconfig.json
 
   frontend:
     build:
