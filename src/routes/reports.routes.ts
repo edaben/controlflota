@@ -118,8 +118,10 @@ router.post('/generate', async (req: AuthRequest, res: Response) => {
         let end: Date;
 
         if (periodStart && periodEnd) {
-            start = new Date(periodStart);
+            start = new Date(periodStart); // 00:00:00 del día inicio
             end = new Date(periodEnd);
+            // Ajustar end al final del día para incluir todas las multas de ese día
+            end.setHours(23, 59, 59, 999);
         } else {
             // Default: last 30 days
             end = new Date();
@@ -127,7 +129,8 @@ router.post('/generate', async (req: AuthRequest, res: Response) => {
             start.setDate(start.getDate() - 30);
         }
 
-        console.log(`[Reports] 📊 Generating consolidated report for tenant ${tenantId}: ${start.toISOString()} to ${end.toISOString()}`);
+        console.log(`[Reports] 📊 Generating consolidated report for tenant ${tenantId}`);
+        console.log(`[Reports] 📅 Range: ${start.toISOString()} to ${end.toISOString()}`);
 
         // Get fines in the period
         const fines = await prisma.fine.findMany({
@@ -140,14 +143,16 @@ router.post('/generate', async (req: AuthRequest, res: Response) => {
             }
         });
 
+        console.log(`[Reports] 🔍 Found ${fines.length} fines in range`);
+
         if (fines.length === 0) {
             return res.status(400).json({
                 error: 'No hay multas en el periodo seleccionado',
-                details: `Periodo: ${start.toLocaleDateString()} - ${end.toLocaleDateString()}`
+                details: `No se encontraron multas entre ${start.toLocaleDateString()} y ${end.toLocaleDateString()}. Intenta un rango más amplio.`
             });
         }
 
-        const totalUsd = fines.reduce((sum, f) => sum + Number(f.amountUsd), 0);
+        const totalUsd = fines.reduce((sum: number, f: any) => sum + Number(f.amountUsd), 0);
 
         // Create the report
         const report = await prisma.consolidatedReport.create({
@@ -158,7 +163,7 @@ router.post('/generate', async (req: AuthRequest, res: Response) => {
                 totalUsd,
                 status: 'GENERATED',
                 items: {
-                    create: fines.map(f => ({
+                    create: fines.map((f: any) => ({
                         vehicleId: f.infraction.vehicleId,
                         infractionId: f.infractionId,
                         fineId: f.id,
@@ -318,7 +323,7 @@ router.post('/send/:id', async (req: AuthRequest, res: Response) => {
                         <th style="padding: 8px; border: 1px solid #dee2e6;">Tipo</th>
                         <th style="padding: 8px; border: 1px solid #dee2e6;">Monto</th>
                     </tr>
-                    ${fines.map(f => `
+                    ${fines.map((f: any) => `
                         <tr>
                             <td style="padding: 8px; border: 1px solid #dee2e6;">${f.infraction.vehicle.plate}</td>
                             <td style="padding: 8px; border: 1px solid #dee2e6;">${f.infraction.type}</td>
