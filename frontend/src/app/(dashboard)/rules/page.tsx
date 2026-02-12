@@ -123,8 +123,10 @@ export default function RulesPage() {
             // Map frontend naming to backend naming if needed (speed zones)
             if (activeTab === 'speed') {
                 payload.geofenceId = formData.traccarGeofenceId || formData.geofenceId;
-                // New Field
-                payload.penaltyPerKmhUsd = formData.penaltyPerKmhUsd || 0;
+                // Ensure all numeric fields are properly set
+                payload.maxSpeedKmh = parseInt(formData.maxSpeedKmh) || 0;
+                payload.fineAmountUsd = parseFloat(formData.fineAmountUsd) || 0;
+                payload.penaltyPerKmhUsd = parseFloat(formData.penaltyPerKmhUsd) || 0;
 
                 // CLEANUP: Remove fields that don't exist in Prisma model
                 delete payload.traccarGeofenceId;
