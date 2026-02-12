@@ -57,12 +57,22 @@ router.post('/login', async (req: Request, res: Response) => {
 // GET /api/auth/me
 router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
     try {
+        console.log('🔍 Fetching profile for user ID:', req.user?.id);
         const user = await prisma.user.findUnique({
             where: { id: req.user?.id },
             include: { tenant: { select: { name: true } } }
         });
 
-        if (!user) return res.status(404).json({ error: 'User not found' });
+        if (!user) {
+            console.log('❌ User not found in DB');
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        console.log('✅ User found, sending data:', {
+            email: user.email,
+            name: user.name,
+            role: user.role
+        });
 
         res.json({
             id: user.id,
@@ -76,6 +86,7 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
             tenantName: user.tenant?.name
         });
     } catch (error) {
+        console.error('💥 Error fetching profile:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -83,11 +94,16 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
 // PUT /api/auth/profile
 router.put('/profile', authenticate, async (req: AuthRequest, res: Response) => {
     const { name, phone, avatarUrl } = req.body;
+    console.log('📝 Updating profile for user:', req.user?.id, 'Data:', { name, phone });
+
     try {
         const user = await prisma.user.update({
             where: { id: req.user?.id },
-            data: { name, phone, avatarUrl }
+            data: { name, phone, avatarUrl },
+            include: { tenant: { select: { name: true } } } // Include tenant to return consistent data
         });
+
+        console.log('✅ Profile updated successfully');
 
         res.json({
             id: user.id,
@@ -97,9 +113,11 @@ router.put('/profile', authenticate, async (req: AuthRequest, res: Response) => 
             phone: user.phone,
             avatarUrl: user.avatarUrl,
             permissions: user.permissions,
-            tenantId: user.tenantId
+            tenantId: user.tenantId,
+            tenantName: user.tenant?.name
         });
     } catch (error) {
+        console.error('💥 Error updating profile:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

@@ -98,7 +98,7 @@ export default function ProfilePage() {
                         </div>
 
                         <div>
-                            <h2 className="text-xl font-bold text-white">{user.name || 'Sin Nombre'}</h2>
+                            <h2 className="text-xl font-bold text-white">{user.name || user.email.split('@')[0]}</h2>
                             <p className="text-slate-400 text-sm">{user.email}</p>
                         </div>
 
