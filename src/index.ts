@@ -29,7 +29,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/webhook', webhookRoutes); // Mover antes para evitar interferencia de middleware en /api
 app.use('/api', entityRoutes);
 app.use('/api', ruleRoutes);
-app.use('/api', reportRoutes);
+app.use('/api/reports', reportRoutes);
 app.use('/api', stopRoutes);
 
 // Initialize Scheduler
