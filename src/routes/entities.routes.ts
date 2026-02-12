@@ -486,12 +486,28 @@ router.get('/speed-zones', async (req: AuthRequest, res: Response) => {
 
 router.post('/speed-zones', authorize([], [PERMISSIONS.MANAGE_RULES]), async (req: AuthRequest, res: Response) => {
     try {
+        const { name, routeId, stopId, geofenceId, traccarGeofenceId, maxSpeedKmh, fineAmountUsd, penaltyPerKmhUsd } = req.body;
+
+        // Sanitize: convert empty strings to null
+        const cleanId = (val: any) => (val && val.toString().trim() !== '') ? val.toString().trim() : null;
+
         const zone = await prisma.speedZone.create({
-            data: { ...req.body, tenantId: req.user?.tenantId as string }
+            data: {
+                tenantId: req.user?.tenantId as string,
+                name: name || 'Nueva Zona',
+                routeId: cleanId(routeId),
+                stopId: cleanId(stopId),
+                geofenceId: cleanId(traccarGeofenceId) || cleanId(geofenceId),
+                maxSpeedKmh: Number(maxSpeedKmh) || 0,
+                fineAmountUsd: Number(fineAmountUsd) || 0,
+                penaltyPerKmhUsd: Number(penaltyPerKmhUsd) || 0
+            }
         });
+        console.log('[SpeedZones] ✅ Created zone:', zone.id, zone.name);
         res.status(201).json(zone);
-    } catch (error) {
-        res.status(400).json({ error: 'Could not create speed zone' });
+    } catch (error: any) {
+        console.error('[SpeedZones] ❌ Error:', error.message);
+        res.status(400).json({ error: 'Could not create speed zone', details: error.message });
     }
 });
 
