@@ -117,3 +117,8 @@ dist
 
 # Mac
 .DS_Store
+
+# Local Backups
+backups/
+local_db_backup.json
+.env.local.backup

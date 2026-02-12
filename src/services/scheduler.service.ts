@@ -8,12 +8,25 @@ export class SchedulerService {
     static init() {
         // Tarea que corre cada hora para revisar qué reportes deben enviarse
         cron.schedule('0 * * * *', async () => {
-            console.log('Running scheduler check...');
+            console.log('⏰ Running scheduler check for reports...');
             await this.processScheduledReports();
         });
 
-        // También podríamos usar cron dinámico por cada tenantId si es necesario,
-        // pero para empezar, una revisión horaria es eficiente.
+        // 🛡️ Tarea de Respaldo de Base de Datos (Cada 4 horas)
+        cron.schedule('0 */4 * * *', async () => {
+            console.log('📦 Iniciando respaldo programado de base de datos...');
+            const { exec } = require('child_process');
+            const path = require('path');
+            const scriptPath = path.join(__dirname, '../../scripts/backup_db.ts');
+
+            exec(`npx ts-node "${scriptPath}"`, (error: any, stdout: any, stderr: any) => {
+                if (error) {
+                    console.error(`❌ Error en respaldo programado: ${error.message}`);
+                    return;
+                }
+                console.log(`✅ Respaldo programado completado.`);
+            });
+        });
     }
 
     static async processScheduledReports() {
