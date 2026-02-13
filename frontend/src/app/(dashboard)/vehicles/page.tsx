@@ -378,44 +378,69 @@ export default function VehiclesPage() {
                                     />
                                 </div>
                             </div>
+
+                            {editingVehicle && (
+                                <div className="bg-primary-500/10 border border-primary-500/20 p-5 rounded-2xl space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-primary-400">
+                                            <ExternalLink size={18} />
+                                            <span className="text-xs font-bold uppercase tracking-wider">Acceso Directo (Magic Link)</span>
+                                        </div>
+                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${editingVehicle.ownerToken ? 'bg-primary-500/20 text-primary-400' : 'bg-slate-500/20 text-slate-400'}`}>
+                                            {editingVehicle.ownerToken ? 'ACTIVO' : 'NO GENERADO'}
+                                        </span>
+                                    </div>
+
+                                    <p className="text-sm text-slate-400 leading-relaxed">
+                                        {editingVehicle.ownerToken
+                                            ? 'Este enlace permite al propietario ver la ubicación y datos del vehículo sin necesidad de usuario ni contraseña.'
+                                            : 'Aún no se ha generado un enlace de acceso para este vehículo. Genera uno para permitir el acceso directo al propietario.'}
+                                    </p>
+
+                                    {editingVehicle.ownerToken ? (
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="text"
+                                                readOnly
+                                                value={`${window.location.origin}/owner/${editingVehicle.ownerToken}`}
+                                                className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 font-mono"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(`${window.location.origin}/owner/${editingVehicle.ownerToken}`);
+                                                    alert('Link copiado al portapapeles');
+                                                }}
+                                                className="bg-primary-600 hover:bg-primary-500 text-white p-2.5 rounded-xl transition-all shadow-lg shadow-primary-900/40"
+                                                title="Copiar Link"
+                                            >
+                                                <Copy size={16} />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={async () => {
+                                                try {
+                                                    const { data } = await api.put(`/vehicles/${editingVehicle.id}`, { regenerateToken: true });
+                                                    setEditingVehicle(data);
+                                                    // Optional: update the vehicles list too
+                                                    setVehicles(prev => prev.map(v => v.id === data.id ? data : v));
+                                                    alert('¡Link Mágico generado con éxito!');
+                                                } catch (err) {
+                                                    alert('Error al generar el link');
+                                                }
+                                            }}
+                                            className="w-full py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-primary-900/20 flex items-center justify-center gap-2"
+                                        >
+                                            <Plus size={18} />
+                                            Generar Link Mágico
+                                        </button>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
-
-                    {editingVehicle?.ownerToken && (
-                        <div className="bg-primary-500/10 border border-primary-500/20 p-5 rounded-2xl space-y-3">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2 text-primary-400">
-                                    <ExternalLink size={18} />
-                                    <span className="text-xs font-bold uppercase tracking-wider">Acceso Directo (Magic Link)</span>
-                                </div>
-                                <span className="bg-primary-500/20 text-primary-400 px-2 py-0.5 rounded text-[10px] font-bold">ACTIVO</span>
-                            </div>
-
-                            <p className="text-sm text-slate-400 leading-relaxed">
-                                Este enlace permite al propietario ver la ubicación y datos del vehículo sin necesidad de usuario ni contraseña.
-                            </p>
-
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="text"
-                                    readOnly
-                                    value={`${window.location.origin}/owner/${editingVehicle.ownerToken}`}
-                                    className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 font-mono"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        navigator.clipboard.writeText(`${window.location.origin}/owner/${editingVehicle.ownerToken}`);
-                                        alert('Link copiado al portapapeles');
-                                    }}
-                                    className="bg-primary-600 hover:bg-primary-500 text-white p-2.5 rounded-xl transition-all shadow-lg shadow-primary-900/40"
-                                    title="Copiar Link"
-                                >
-                                    <Copy size={16} />
-                                </button>
-                            </div>
-                        </div>
-                    )}
 
                     <div className="flex gap-3 pt-4">
                         <button
