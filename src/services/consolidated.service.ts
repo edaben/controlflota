@@ -4,14 +4,21 @@ import { ReportingService } from './reporting.service';
 const prisma = new PrismaClient();
 
 export class ConsolidatedService {
-    static async generateAndSend(tenantId: string, start: Date, end: Date) {
-        // 1. Obtener multas del periodo
+    static async generateAndSend(tenantId: string, start: Date, end: Date, vehicleIds?: string[]) {
+        const where: any = {
+            tenantId,
+            infraction: {
+                detectedAt: { gte: start, lte: end }
+            }
+        };
+
+        if (vehicleIds && vehicleIds.length > 0) {
+            where.infraction.vehicleId = { in: vehicleIds };
+        }
+
         const fines = await prisma.fine.findMany({
-            where: {
-                tenantId,
-                createdAt: { gte: start, lte: end }
-            },
-            include: { infraction: true }
+            where,
+            include: { infraction: { include: { vehicle: true } } }
         });
 
         if (fines.length === 0) return null;

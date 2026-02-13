@@ -73,9 +73,9 @@ export default function RulesPage() {
         } else {
             // Default form data based on active tab
             if (activeTab === 'segments') {
-                setFormData({ fromStopId: '', toStopId: '', maxTimeMinutes: 30, fineAmountUsd: 0 });
+                setFormData({ fromStopId: '', toStopId: '', expectedMaxMinutes: 30, fineAmountUsd: 0, penaltyPerMinuteUsd: 0 });
             } else if (activeTab === 'stops') {
-                setFormData({ stopId: '', maxDwellMinutes: 5, fineAmountUsd: 0 });
+                setFormData({ stopId: '', minDwellTimeMinutes: 0, maxDwellMinutes: 5, fineAmountUsd: 0, penaltyPerMinuteUsd: 0 });
             } else if (activeTab === 'speed') {
                 setFormData({ name: '', stopId: '', geofenceId: '', maxSpeedKmh: 60, fineAmountUsd: 0, penaltyPerKmhUsd: 0 });
             }
@@ -90,57 +90,36 @@ export default function RulesPage() {
                 : activeTab === 'stops' ? '/stop-rules'
                     : '/speed-zones';
 
-            let payload = { ...formData };
+            // Crear payload limpio para evitar enviar objetos circulares o extras
+            const payload: any = {
+                expectedMaxMinutes: parseInt(formData.expectedMaxMinutes) || 0,
+                fineAmountUsd: parseFloat(formData.fineAmountUsd) || 0,
+                penaltyPerMinuteUsd: parseFloat(formData.penaltyPerMinuteUsd) || 0,
+                active: formData.active !== undefined ? formData.active : true,
+            };
 
-            // Inyectar routeId automáticamente para reglas de segmentos
             if (activeTab === 'segments') {
+                payload.fromStopId = formData.fromStopId;
+                payload.toStopId = formData.toStopId;
                 const selectedStop = stops.find((s: any) => s.id === formData.fromStopId) as any;
                 if (selectedStop) {
                     payload.routeId = selectedStop.routeId;
                 }
-                // Backend expects 'expectedMaxMinutes', frontend uses 'maxTimeMinutes'
-                payload.expectedMaxMinutes = formData.maxTimeMinutes || 0;
-
-                // CRITICAL: Remove fields not in Prisma schema to avoid "Unknown argument" error
-                delete payload.maxTimeMinutes;
-
-                // New Field
-                payload.penaltyPerMinuteUsd = formData.penaltyPerMinuteUsd;
-            }
-
-            if (activeTab === 'stops') {
-                // Ensure minDwellTimeMinutes is int
-                if (formData.minDwellTimeMinutes) {
-                    payload.minDwellTimeMinutes = parseInt(formData.minDwellTimeMinutes);
-                }
-                // Ensure maxDwellMinutes is int
+            } else if (activeTab === 'stops') {
+                payload.stopId = formData.stopId;
+                payload.minDwellTimeMinutes = parseInt(formData.minDwellTimeMinutes) || 0;
                 payload.maxDwellMinutes = parseInt(formData.maxDwellMinutes) || 0;
-
-                // New Field
-                payload.penaltyPerMinuteUsd = formData.penaltyPerMinuteUsd;
-            }
-
-            // Map frontend naming to backend naming if needed (speed zones)
-            if (activeTab === 'speed') {
-                payload.geofenceId = formData.traccarGeofenceId || formData.geofenceId;
-                // Ensure all numeric fields are properly set
+            } else if (activeTab === 'speed') {
+                payload.name = formData.name;
+                payload.geofenceId = formData.traccarGeofenceId || formData.geofenceId || null;
+                payload.stopId = formData.stopId || null;
+                payload.routeId = formData.routeId || null;
                 payload.maxSpeedKmh = parseInt(formData.maxSpeedKmh) || 0;
-                payload.fineAmountUsd = parseFloat(formData.fineAmountUsd) || 0;
                 payload.penaltyPerKmhUsd = parseFloat(formData.penaltyPerKmhUsd) || 0;
-
-                // CRITICAL: Convert empty strings to null for backend validation
-                if (payload.stopId === '' || payload.stopId === undefined) {
-                    payload.stopId = null;
-                }
-                if (payload.geofenceId === '' || payload.geofenceId === undefined) {
-                    payload.geofenceId = null;
-                }
-
-                // CLEANUP: Remove fields that don't exist in Prisma model
-                delete payload.traccarGeofenceId;
+                payload.fineAmountUsd = parseFloat(formData.fineAmountUsd) || 0;
             }
 
-            console.log('Sending Rule Payload (Sanitized):', payload); // Debug log
+            console.log('Sending Clean Payload:', payload);
 
             if (editingRule) {
                 await api.put(`${endpoint}/${editingRule.id}`, payload);
@@ -150,9 +129,12 @@ export default function RulesPage() {
 
             setShowModal(false);
             fetchInitialData();
-        } catch (err) {
-            console.error(err);
-            alert('Error al guardar la regla');
+        } catch (err: any) {
+            console.error('Full Error Object:', err);
+            const errorInfo = err.response
+                ? `Status: ${err.response.status}\nData: ${JSON.stringify(err.response.data)}`
+                : `Message: ${err.message}`;
+            alert('Error al guardar la regla:\n' + errorInfo);
         }
     };
 
@@ -237,7 +219,7 @@ export default function RulesPage() {
                                                 {rule.fromStop?.name} → {rule.toStop?.name}
                                             </div>
                                             <div className="text-sm text-slate-400">
-                                                Tiempo Máximo: {rule.maxTimeMinutes} minutos
+                                                Tiempo Máximo: {rule.expectedMaxMinutes} minutos
                                                 <span className="ml-2 text-emerald-400">• Multa: ${Number(rule.fineAmountUsd).toFixed(2)}</span>
                                             </div>
                                         </div>
@@ -287,7 +269,7 @@ export default function RulesPage() {
                                         <div>
                                             <div className="text-white font-medium">Parada: {rule.stop?.name}</div>
                                             <div className="text-sm text-slate-400">
-                                                Dwell Time: {rule.minDwellTimeMinutes}-{rule.maxDwellTimeMinutes} min
+                                                Dwell Time: {rule.minDwellTimeMinutes || 0}-{rule.maxDwellMinutes} min
                                                 <span className="ml-2 text-emerald-400">• Multa: ${Number(rule.fineAmountUsd).toFixed(2)}</span>
                                             </div>
                                         </div>
@@ -409,8 +391,8 @@ export default function RulesPage() {
                                 <input
                                     type="number"
                                     className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white"
-                                    value={formData.maxTimeMinutes || 0}
-                                    onChange={(e) => setFormData({ ...formData, maxTimeMinutes: parseInt(e.target.value) || 0 })}
+                                    value={formData.expectedMaxMinutes || 0}
+                                    onChange={(e) => setFormData({ ...formData, expectedMaxMinutes: parseInt(e.target.value) || 0 })}
                                     required
                                 />
                             </div>

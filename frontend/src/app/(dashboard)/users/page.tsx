@@ -16,6 +16,14 @@ interface UserData {
     createdAt: string;
     updatedAt: string;
     tenant?: { name: string };
+    profileId?: string | null;
+    profile?: { name: string };
+}
+
+interface ProfileData {
+    id: string;
+    name: string;
+    permissions: string[];
 }
 
 export default function UsersPage() {
@@ -28,8 +36,11 @@ export default function UsersPage() {
         email: '',
         password: '',
         role: 'CLIENT_USER',
-        permissions: [] as string[]
+        permissions: [] as string[],
+        profileId: ''
     });
+    const [profiles, setProfiles] = useState<ProfileData[]>([]);
+    const [useProfile, setUseProfile] = useState(false);
 
     useEffect(() => {
         const userStr = localStorage.getItem('user');
@@ -46,7 +57,17 @@ export default function UsersPage() {
             }
         }
         fetchUsers();
+        fetchProfiles();
     }, []);
+
+    const fetchProfiles = async () => {
+        try {
+            const { data } = await api.get('/profiles');
+            setProfiles(data);
+        } catch (err) {
+            console.error('Error fetching profiles', err);
+        }
+    };
 
     const fetchUsers = async () => {
         try {
@@ -63,19 +84,23 @@ export default function UsersPage() {
     const handleOpenModal = (user?: UserData) => {
         if (user) {
             setEditingUser(user);
+            setUseProfile(!!user.profileId);
             setFormData({
                 email: user.email,
                 password: '',
                 role: user.role,
-                permissions: user.permissions || []
+                permissions: user.permissions || [],
+                profileId: user.profileId || ''
             });
         } else {
             setEditingUser(null);
+            setUseProfile(false);
             setFormData({
                 email: '',
                 password: '',
                 role: 'CLIENT_USER',
-                permissions: DEFAULT_ROLE_PERMISSIONS['CLIENT_USER'] || []
+                permissions: DEFAULT_ROLE_PERMISSIONS['CLIENT_USER'] || [],
+                profileId: ''
             });
         }
         setIsModalOpen(true);
@@ -88,8 +113,10 @@ export default function UsersPage() {
             email: '',
             password: '',
             role: 'CLIENT_USER',
-            permissions: []
+            permissions: [],
+            profileId: ''
         });
+        setUseProfile(false);
     };
 
     const handleRoleChange = (newRole: string) => {
@@ -118,7 +145,8 @@ export default function UsersPage() {
             const payload = {
                 email: formData.email,
                 role: formData.role,
-                permissions: formData.permissions
+                permissions: useProfile ? [] : formData.permissions,
+                profileId: useProfile ? formData.profileId : null
             };
 
             if (editingUser) {
@@ -195,9 +223,16 @@ export default function UsersPage() {
                                     </div>
                                 </td>
                                 <td className="px-6 py-4">
-                                    <div className="flex items-center gap-2 text-slate-300">
-                                        <Shield size={14} className="text-amber-400" />
-                                        <span className="text-sm">{u.role}</span>
+                                    <div className="flex flex-col">
+                                        <div className="flex items-center gap-2 text-slate-300">
+                                            <Shield size={14} className="text-amber-400" />
+                                            <span className="text-sm">{u.role}</span>
+                                        </div>
+                                        {u.profile && (
+                                            <div className="text-[10px] text-emerald-500 font-bold mt-1 uppercase tracking-tighter">
+                                                Perfil: {u.profile.name}
+                                            </div>
+                                        )}
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 text-slate-400 text-sm">
@@ -281,42 +316,87 @@ export default function UsersPage() {
                         </select>
                     </div>
 
-                    <div className="pt-2">
-                        <label className="block text-sm font-medium text-slate-300 mb-3">
-                            Permisos Específicos
-                        </label>
-                        <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 max-h-60 overflow-y-auto space-y-4">
-                            {Object.entries(
-                                Object.values(PERMISSIONS).reduce((acc, perm) => {
-                                    const cat = PERMISSION_LABELS[perm as Permission]?.category || 'Otros';
-                                    if (!acc[cat]) acc[cat] = [];
-                                    acc[cat].push(perm as Permission);
-                                    return acc;
-                                }, {} as Record<string, Permission[]>)
-                            ).map(([category, perms]) => (
-                                <div key={category} className="space-y-2">
-                                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">{category}</h4>
-                                    <div className="grid grid-cols-1 gap-2">
-                                        {perms.map(perm => (
-                                            <label key={perm} className="flex items-center gap-3 cursor-pointer group">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={formData.permissions.includes(perm)}
-                                                    onChange={() => togglePermission(perm)}
-                                                    className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500/20"
-                                                />
-                                                <span className="text-sm text-slate-400 group-hover:text-slate-200 transition-colors">
-                                                    {PERMISSION_LABELS[perm]?.label || perm}
-                                                </span>
-                                            </label>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
+                    <div className="p-4 bg-slate-800/30 rounded-xl border border-slate-800 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <label className="text-sm font-medium text-slate-300">
+                                Tipo de Configuración
+                            </label>
+                            <div className="flex bg-slate-900 p-1 rounded-lg">
+                                <button
+                                    type="button"
+                                    onClick={() => setUseProfile(false)}
+                                    className={`px-3 py-1 text-xs rounded-md transition-all ${!useProfile ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                                >
+                                    Manual
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setUseProfile(true)}
+                                    className={`px-3 py-1 text-xs rounded-md transition-all ${useProfile ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                                >
+                                    Por Perfil
+                                </button>
+                            </div>
                         </div>
-                        <p className="text-[10px] text-slate-500 mt-2">
-                            * Los permisos marcados son efectivos para este usuario. SUPER_ADMIN tiene acceso total por defecto.
-                        </p>
+
+                        {useProfile ? (
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">
+                                    Seleccionar Perfil
+                                </label>
+                                <select
+                                    value={formData.profileId || ''}
+                                    onChange={(e) => setFormData({ ...formData, profileId: e.target.value })}
+                                    className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                    required
+                                >
+                                    <option value="">-- Elige un perfil --</option>
+                                    {profiles.map(p => (
+                                        <option key={p.id} value={p.id}>{p.name}</option>
+                                    ))}
+                                </select>
+                                {profiles.length === 0 && (
+                                    <p className="text-[10px] text-amber-400 mt-2">
+                                        No hay perfiles creados. Ve a la sección de "Perfiles" para crear uno.
+                                    </p>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="pt-2">
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-3">
+                                    Permisos Personalizados
+                                </label>
+                                <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-3 max-h-48 overflow-y-auto space-y-4">
+                                    {Object.entries(
+                                        Object.values(PERMISSIONS).reduce((acc, perm) => {
+                                            const cat = PERMISSION_LABELS[perm as Permission]?.category || 'Otros';
+                                            if (!acc[cat]) acc[cat] = [];
+                                            acc[cat].push(perm as Permission);
+                                            return acc;
+                                        }, {} as Record<string, Permission[]>)
+                                    ).map(([category, perms]) => (
+                                        <div key={category} className="space-y-2">
+                                            <h4 className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">{category}</h4>
+                                            <div className="grid grid-cols-1 gap-2">
+                                                {perms.map(perm => (
+                                                    <label key={perm} className="flex items-center gap-3 cursor-pointer group">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={formData.permissions.includes(perm)}
+                                                            onChange={() => togglePermission(perm)}
+                                                            className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500/20"
+                                                        />
+                                                        <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">
+                                                            {PERMISSION_LABELS[perm]?.label || perm}
+                                                        </span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex gap-3 pt-4">

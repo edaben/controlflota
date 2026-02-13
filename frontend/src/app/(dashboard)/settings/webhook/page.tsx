@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
-import { Webhook, Copy, CheckCircle, Activity, AlertCircle, Settings as SettingsIcon, Trash2, MapPin, Zap } from 'lucide-react';
+import { Webhook, Copy, CheckCircle, Activity, AlertCircle, Settings as SettingsIcon, Trash2, MapPin, Zap, User, Lock } from 'lucide-react';
+import Modal from '@/components/Modal';
 
 export default function SettingsPage() {
     const router = useRouter();
@@ -11,6 +12,8 @@ export default function SettingsPage() {
     const [copied, setCopied] = useState(false);
     const [logs, setLogs] = useState([]);
     const [stats, setStats] = useState({ total: 0, today: 0, errors: 0 });
+    const [selectedRawLog, setSelectedRawLog] = useState<any>(null);
+    const [user, setUser] = useState<any>(null);
 
 
 
@@ -18,8 +21,9 @@ export default function SettingsPage() {
         const userStr = localStorage.getItem('user');
         if (userStr) {
             try {
-                const user = JSON.parse(userStr);
-                if (user.role === 'CLIENT_USER') {
+                const parsedUser = JSON.parse(userStr);
+                setUser(parsedUser);
+                if (parsedUser.role === 'CLIENT_USER') {
                     router.push('/dashboard');
                     return;
                 }
@@ -170,101 +174,151 @@ export default function SettingsPage() {
 
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
-                            <Activity className="text-blue-400" size={24} />
+            {user?.role === 'SUPER_ADMIN' ? (
+                <>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                                    <Activity className="text-blue-400" size={24} />
+                                </div>
+                            </div>
+                            <div className="text-3xl font-bold text-white mb-1">{stats.total}</div>
+                            <div className="text-sm text-slate-400">Total de Eventos</div>
+                        </div>
+
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                                    <CheckCircle className="text-emerald-400" size={24} />
+                                </div>
+                            </div>
+                            <div className="text-3xl font-bold text-white mb-1">{stats.today}</div>
+                            <div className="text-sm text-slate-400">Eventos Hoy</div>
+                        </div>
+
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="w-12 h-12 rounded-xl bg-red-500/20 flex items-center justify-center">
+                                    <AlertCircle className="text-red-400" size={24} />
+                                </div>
+                            </div>
+                            <div className="text-3xl font-bold text-white mb-1">{stats.errors}</div>
+                            <div className="text-sm text-slate-400">Errores</div>
                         </div>
                     </div>
-                    <div className="text-3xl font-bold text-white mb-1">{stats.total}</div>
-                    <div className="text-sm text-slate-400">Total de Eventos</div>
-                </div>
 
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center">
-                            <CheckCircle className="text-emerald-400" size={24} />
+                    {/* Recent Events */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+                        <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-white">Eventos Recientes del Webhook</h3>
+                            {logs.length > 0 && (
+                                <button
+                                    onClick={handleClearLogs}
+                                    className="text-red-400 hover:text-red-300 transition-colors flex items-center gap-2 text-sm font-medium"
+                                >
+                                    <Trash2 size={16} />
+                                    Limpiar Historial
+                                </button>
+                            )}
                         </div>
+                        <table className="w-full text-left">
+                            <thead>
+                                <tr className="bg-slate-800/50 text-slate-400 text-sm">
+                                    <th className="px-6 py-4 font-medium">Timestamp</th>
+                                    <th className="px-6 py-4 font-medium">Vehículo</th>
+                                    <th className="px-6 py-4 font-medium">Tipo</th>
+                                    <th className="px-6 py-4 font-medium">Detalle</th>
+                                    <th className="px-6 py-4 font-medium">Device ID</th>
+                                    <th className="px-6 py-4 font-medium">Estado</th>
+                                    <th className="px-6 py-4 font-medium text-right">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800">
+                                {logs.map((log: any, idx) => (
+                                    <tr key={idx} className="hover:bg-slate-800/30 transition-colors">
+                                        <td className="px-6 py-4 text-slate-300 text-sm">
+                                            {new Date(log.timestamp).toLocaleString('es-EC')}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className="bg-slate-800 text-slate-200 px-2 py-1 rounded text-xs font-mono border border-slate-700">
+                                                {log.vehiclePlate || 'N/A'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-white font-medium">{log.eventType || 'position'}</td>
+                                        <td className="px-6 py-4 text-sm">
+                                            {renderEventDetail(log)}
+                                        </td>
+                                        <td className="px-6 py-4 text-slate-400 font-mono text-sm">{log.deviceId || 'N/A'}</td>
+                                        <td className="px-6 py-4">
+                                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${log.success
+                                                ? 'bg-emerald-500/20 text-emerald-400'
+                                                : 'bg-red-500/20 text-red-400'
+                                                }`}>
+                                                {log.success ? 'Procesado' : 'Error'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <button
+                                                onClick={() => setSelectedRawLog(log)}
+                                                className="text-blue-400 hover:text-blue-300 text-sm font-medium hover:underline transition-colors"
+                                            >
+                                                Ver JSON
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {logs.length === 0 && (
+                                    <tr>
+                                        <td colSpan={4} className="px-6 py-12 text-center text-slate-500">
+                                            No hay eventos recibidos aún.
+                                            <br />
+                                            <span className="text-sm">Configura el webhook en Traccar para comenzar a recibir eventos.</span>
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
                     </div>
-                    <div className="text-3xl font-bold text-white mb-1">{stats.today}</div>
-                    <div className="text-sm text-slate-400">Eventos Hoy</div>
+                </>
+            ) : (
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center">
+                    <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Lock className="text-slate-500" size={32} />
+                    </div>
+                    <h3 className="text-xl font-bold text-white mb-2">Acceso Restringido</h3>
+                    <p className="text-slate-400 max-w-md mx-auto">
+                        La visualización de eventos en tiempo real y datos técnicos está reservada para el Super Administrador del sistema.
+                    </p>
                 </div>
+            )}
 
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="w-12 h-12 rounded-xl bg-red-500/20 flex items-center justify-center">
-                            <AlertCircle className="text-red-400" size={24} />
+            {/* JSON Modal */}
+            <Modal
+                isOpen={!!selectedRawLog}
+                onClose={() => setSelectedRawLog(null)}
+                title="Datos Crudos del Webhook (JSON)"
+            >
+                {selectedRawLog && (
+                    <div className="space-y-4">
+                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                            <pre className="text-xs text-emerald-400 font-mono overflow-auto max-h-[60vh]">
+                                {JSON.stringify(selectedRawLog.payload, null, 2)}
+                            </pre>
                         </div>
-                    </div>
-                    <div className="text-3xl font-bold text-white mb-1">{stats.errors}</div>
-                    <div className="text-sm text-slate-400">Errores</div>
-                </div>
-            </div>
-
-            {/* Recent Events */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center">
-                    <h3 className="text-lg font-bold text-white">Eventos Recientes del Webhook</h3>
-                    {logs.length > 0 && (
+                        <div className="flex justify-between items-center text-xs text-slate-500">
+                            <span>ID Dispositivo: {selectedRawLog.deviceId}</span>
+                            <span>Fecha: {new Date(selectedRawLog.timestamp).toLocaleString()}</span>
+                        </div>
                         <button
-                            onClick={handleClearLogs}
-                            className="text-red-400 hover:text-red-300 transition-colors flex items-center gap-2 text-sm font-medium"
+                            onClick={() => setSelectedRawLog(null)}
+                            className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-medium transition-colors"
                         >
-                            <Trash2 size={16} />
-                            Limpiar Historial
+                            Cerrar
                         </button>
-                    )}
-                </div>
-                <table className="w-full text-left">
-                    <thead>
-                        <tr className="bg-slate-800/50 text-slate-400 text-sm">
-                            <th className="px-6 py-4 font-medium">Timestamp</th>
-                            <th className="px-6 py-4 font-medium">Vehículo</th>
-                            <th className="px-6 py-4 font-medium">Tipo</th>
-                            <th className="px-6 py-4 font-medium">Detalle</th>
-                            <th className="px-6 py-4 font-medium">Device ID</th>
-                            <th className="px-6 py-4 font-medium">Estado</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800">
-                        {logs.map((log: any, idx) => (
-                            <tr key={idx} className="hover:bg-slate-800/30 transition-colors">
-                                <td className="px-6 py-4 text-slate-300 text-sm">
-                                    {new Date(log.timestamp).toLocaleString('es-EC')}
-                                </td>
-                                <td className="px-6 py-4">
-                                    <span className="bg-slate-800 text-slate-200 px-2 py-1 rounded text-xs font-mono border border-slate-700">
-                                        {log.vehiclePlate || 'N/A'}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-4 text-white font-medium">{log.eventType || 'position'}</td>
-                                <td className="px-6 py-4 text-sm">
-                                    {renderEventDetail(log)}
-                                </td>
-                                <td className="px-6 py-4 text-slate-400 font-mono text-sm">{log.deviceId || 'N/A'}</td>
-                                <td className="px-6 py-4">
-                                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${log.success
-                                        ? 'bg-emerald-500/20 text-emerald-400'
-                                        : 'bg-red-500/20 text-red-400'
-                                        }`}>
-                                        {log.success ? 'Procesado' : 'Error'}
-                                    </span>
-                                </td>
-                            </tr>
-                        ))}
-                        {logs.length === 0 && (
-                            <tr>
-                                <td colSpan={4} className="px-6 py-12 text-center text-slate-500">
-                                    No hay eventos recibidos aún.
-                                    <br />
-                                    <span className="text-sm">Configura el webhook en Traccar para comenzar a recibir eventos.</span>
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
+                    </div>
+                )}
+            </Modal>
         </div>
     );
 }

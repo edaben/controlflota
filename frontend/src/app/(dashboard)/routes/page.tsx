@@ -21,6 +21,7 @@ export default function RoutesPage() {
     const [loading, setLoading] = useState(true);
     const [expandedRouteId, setExpandedRouteId] = useState<string | null>(null);
     const [selectedRouteLocal, setSelectedRouteLocal] = useState<any>(null); // Para el mapa
+    const [selectedStopIds, setSelectedStopIds] = useState<string[]>([]); // Para selección múltiple
 
     // Modal states
     const [showRouteModal, setShowRouteModal] = useState(false);
@@ -177,6 +178,7 @@ export default function RoutesPage() {
         try {
             await api.delete(`/stops/${id}`);
             fetchRoutes();
+            setSelectedStopIds(prev => prev.filter(stopId => stopId !== id));
         } catch (err: any) {
             console.error(err);
             const msg = err.response?.data?.error || err.message || 'Error desconocido';
@@ -184,10 +186,50 @@ export default function RoutesPage() {
         }
     };
 
+    const handleToggleStopSelection = (stopId: string) => {
+        if (!hasPermission(user, PERMISSIONS.BULK_DELETE)) return;
+        setSelectedStopIds(prev =>
+            prev.includes(stopId)
+                ? prev.filter(id => id !== stopId)
+                : [...prev, stopId]
+        );
+    };
+
+    const handleSelectAllStops = (routeId: string) => {
+        if (!hasPermission(user, PERMISSIONS.BULK_DELETE)) return;
+        const route = routes.find(r => r.id === routeId);
+        if (!route || !route.stops) return;
+
+        const allStopIds = route.stops.map((s: any) => s.id);
+        const allSelected = allStopIds.every((id: string) => selectedStopIds.includes(id));
+
+        if (allSelected) {
+            setSelectedStopIds(prev => prev.filter(id => !allStopIds.includes(id)));
+        } else {
+            setSelectedStopIds(prev => [...new Set([...prev, ...allStopIds])]);
+        }
+    };
+
+    const handleBulkDeleteStops = async () => {
+        if (selectedStopIds.length === 0) return;
+        if (!confirm(`¿Estás seguro de eliminar las ${selectedStopIds.length} paradas seleccionadas?`)) return;
+
+        try {
+            await api.post('/stops/bulk-delete', { ids: selectedStopIds });
+            setSelectedStopIds([]);
+            fetchRoutes();
+        } catch (err: any) {
+            console.error(err);
+            alert('Error al eliminar las paradas seleccionadas');
+        }
+    };
+
     const toggleExpand = (routeId: string) => {
         const route = routes.find(r => r.id === routeId);
         setExpandedRouteId(expandedRouteId === routeId ? null : routeId);
         if (route) setSelectedRouteLocal(route);
+        // Limpiar selección al cambiar o cerrar ruta para evitar errores visuales
+        setSelectedStopIds([]);
     };
 
     return (
@@ -237,12 +279,14 @@ export default function RoutesPage() {
                                         >
                                             <Edit2 size={18} />
                                         </button>
-                                        <button
-                                            onClick={(e) => handleDeleteRoute(route.id, e)}
-                                            className="p-2 text-slate-400 hover:text-red-400 transition-colors"
-                                        >
-                                            <Trash2 size={18} />
-                                        </button>
+                                        {user?.role === 'SUPER_ADMIN' && (
+                                            <button
+                                                onClick={(e) => handleDeleteRoute(route.id, e)}
+                                                className="p-2 text-slate-400 hover:text-red-400 transition-colors"
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -251,23 +295,50 @@ export default function RoutesPage() {
                             {expandedRouteId === route.id && (
                                 <div className="border-t border-slate-800 bg-slate-900/50 p-4">
                                     <div className="flex justify-between items-center mb-4 px-2">
-                                        <h4 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Geocercas</h4>
-                                        {hasPermission(user, PERMISSIONS.MANAGE_ROUTES) && (
-                                            <button
-                                                onClick={() => handleOpenStopModal(route.id)}
-                                                className="text-xs font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 bg-emerald-400/10 px-3 py-1.5 rounded-lg transition-colors border border-emerald-400/20"
-                                            >
-                                                <Plus size={14} />
-                                                Agregar
-                                            </button>
-                                        )}
+                                        <div className="flex items-center gap-3">
+                                            <input
+                                                type="checkbox"
+                                                className={`w-4 h-4 rounded border-slate-700 bg-slate-800 text-blue-500 focus:ring-blue-500/20 ${!hasPermission(user, PERMISSIONS.BULK_DELETE) ? 'opacity-30 cursor-not-allowed' : ''}`}
+                                                disabled={!hasPermission(user, PERMISSIONS.BULK_DELETE)}
+                                                checked={route.stops?.length > 0 && route.stops.every((s: any) => selectedStopIds.includes(s.id))}
+                                                onChange={() => handleSelectAllStops(route.id)}
+                                            />
+                                            <h4 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Geocercas</h4>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {hasPermission(user, PERMISSIONS.BULK_DELETE) && selectedStopIds.length > 0 && route.stops?.some((s: any) => selectedStopIds.includes(s.id)) && (
+                                                <button
+                                                    onClick={handleBulkDeleteStops}
+                                                    className="text-xs font-bold text-red-400 hover:text-red-300 flex items-center gap-1 bg-red-400/10 px-3 py-1.5 rounded-lg transition-colors border border-red-400/20"
+                                                >
+                                                    <Trash2 size={14} />
+                                                    Eliminar ({route.stops.filter((s: any) => selectedStopIds.includes(s.id)).length})
+                                                </button>
+                                            )}
+                                            {hasPermission(user, PERMISSIONS.MANAGE_ROUTES) && (
+                                                <button
+                                                    onClick={() => handleOpenStopModal(route.id)}
+                                                    className="text-xs font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 bg-emerald-400/10 px-3 py-1.5 rounded-lg transition-colors border border-emerald-400/20"
+                                                >
+                                                    <Plus size={14} />
+                                                    Agregar
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
 
                                     {route.stops && route.stops.length > 0 ? (
                                         <div className="space-y-2">
                                             {route.stops.map((stop: any) => (
-                                                <div key={stop.id} className="flex items-center justify-between p-3 bg-slate-800 rounded-lg border border-slate-700/50 hover:border-slate-600 transition-colors group">
+                                                <div key={stop.id} className={`flex items-center justify-between p-3 bg-slate-800 rounded-lg border ${selectedStopIds.includes(stop.id) ? 'border-blue-500/50 bg-blue-500/5' : 'border-slate-700/50'} hover:border-slate-600 transition-colors group`}>
                                                     <div className="flex items-center gap-3">
+                                                        <input
+                                                            type="checkbox"
+                                                            className={`w-4 h-4 rounded border-slate-700 bg-slate-900 text-blue-500 focus:ring-blue-500/20 ${!hasPermission(user, PERMISSIONS.BULK_DELETE) ? 'opacity-30 cursor-not-allowed' : ''}`}
+                                                            disabled={!hasPermission(user, PERMISSIONS.BULK_DELETE)}
+                                                            checked={selectedStopIds.includes(stop.id)}
+                                                            onChange={() => handleToggleStopSelection(stop.id)}
+                                                        />
                                                         <div className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 font-mono text-xs font-bold border border-slate-600">
                                                             {stop.order}
                                                         </div>
@@ -285,9 +356,11 @@ export default function RoutesPage() {
                                                             <button onClick={() => handleOpenStopModal(route.id, stop)} className="text-slate-400 hover:text-primary-400 p-1">
                                                                 <Edit2 size={14} />
                                                             </button>
-                                                            <button onClick={() => handleDeleteStop(stop.id)} className="text-slate-400 hover:text-red-400 p-1">
-                                                                <Trash2 size={14} />
-                                                            </button>
+                                                            {user?.role === 'SUPER_ADMIN' && (
+                                                                <button onClick={() => handleDeleteStop(stop.id)} className="text-slate-400 hover:text-red-400 p-1">
+                                                                    <Trash2 size={14} />
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>

@@ -6,9 +6,10 @@ export class InfractionService {
     /**
      * Detecta infracciones por exceso de tiempo en parada (Dwell Time)
      */
-    static async detectDwellTimeInfraction(tenantId: string, vehicleId: string, stopId: string, dwellMinutes: number) {
+    static async detectDwellTimeInfraction(tenantId: string, vehicleId: string, stopId: string, dwellMinutes: number, payload?: any) {
         const rule = await prisma.stopRule.findFirst({
-            where: { tenantId, stopId, active: true }
+            where: { tenantId, stopId, active: true },
+            include: { stop: true }
         });
 
         if (rule) {
@@ -18,11 +19,18 @@ export class InfractionService {
                 // Calculate dynamic fine: Base + (Excess * PenaltyPerMinute)
                 const dynamicFine = Number(rule.fineAmountUsd) + (excessMinutes * Number(rule.penaltyPerMinuteUsd || 0));
 
+                // Extraer dueño si viene en el payload
+                const owner = payload?.device?.object_owner || payload?.device?.owner || payload?.object_owner;
+
                 await this.createInfraction(tenantId, vehicleId, InfractionType.DWELL_TIME, dynamicFine, {
                     stopId,
+                    stopName: rule.stop.name,
+                    latitude: rule.stop.latitude,
+                    longitude: rule.stop.longitude,
                     dwellMinutes,
                     maxAllowed: rule.maxDwellMinutes,
-                    excessMinutes
+                    excessMinutes,
+                    object_owner: owner
                 });
             }
             // 2. Check Min Dwell Time (Too fast / "Correteo" at stop)
@@ -34,10 +42,14 @@ export class InfractionService {
 
                 await this.createInfraction(tenantId, vehicleId, InfractionType.DWELL_TIME, dynamicFine, {
                     stopId,
+                    stopName: rule.stop.name,
+                    latitude: rule.stop.latitude,
+                    longitude: rule.stop.longitude,
                     dwellMinutes,
                     minRequired: rule.minDwellTimeMinutes,
                     earlyMinutes,
-                    subtype: 'MIN_DWELL_VIOLATION'
+                    subtype: 'MIN_DWELL_VIOLATION',
+                    object_owner: payload?.device?.object_owner || payload?.device?.owner || payload?.object_owner
                 });
             }
         }
@@ -89,14 +101,25 @@ export class InfractionService {
 
                     console.log(`[Overspeed] 🚨 INFRACTION DETECTED! Speed: ${speedKmh} > ${zoneRule.maxSpeedKmh}. Fine: ${dynamicFine}`);
 
-                    await this.createInfraction(tenantId, vehicleId, InfractionType.OVERSPEED, dynamicFine, {
+                    const latitude = payload.latitude || payload.position?.latitude;
+                    const longitude = payload.longitude || payload.position?.longitude;
+                    const address = payload.address || payload.position?.address;
+                    const object_owner = payload.device?.object_owner || payload.device?.owner || payload.object_owner;
+
+                    const detailsObj = {
                         speedKmh,
                         maxAllowed: zoneRule.maxSpeedKmh,
                         excessKmh,
                         zoneName: zoneRule.name,
                         rawSpeedKnots: rawSpeed,
-                        geofenceId: geofenceId || 'GLOBAL'
-                    });
+                        geofenceId: geofenceId || 'GLOBAL',
+                        latitude,
+                        longitude,
+                        address,
+                        object_owner
+                    };
+
+                    await this.createInfraction(tenantId, vehicleId, InfractionType.OVERSPEED, dynamicFine, detailsObj);
                 }
             } else {
                 console.log(`[Overspeed] ℹ️ No active SpeedZone rule for Vehicle ${vehicleId} (Geofence: ${geofenceId || 'GLOBAL'}).`);
@@ -109,7 +132,7 @@ export class InfractionService {
     /**
      * Detecta infracciones por tiempo entre paradas (Tramo A -> B)
      */
-    static async detectSegmentTimeInfraction(tenantId: string, vehicleId: string, toStopId: string, arrivalTime: Date) {
+    static async detectSegmentTimeInfraction(tenantId: string, vehicleId: string, toStopId: string, arrivalTime: Date, payload?: any) {
         // 1. Buscar la llegada anterior más reciente del vehículo que no sea esta misma
         const previousArrival = await prisma.stopArrival.findFirst({
             where: {
@@ -147,7 +170,8 @@ export class InfractionService {
                     travelMinutes,
                     maxAllowed: rule.expectedMaxMinutes,
                     excessMinutes,
-                    subtype: 'MAX_TIME_VIOLATION'
+                    subtype: 'MAX_TIME_VIOLATION',
+                    object_owner: payload?.device?.object_owner || payload?.device?.owner || payload?.object_owner
                 });
             }
             // Si es menor que el mínimo permitido (Adelanto / "Correteo")
@@ -161,7 +185,8 @@ export class InfractionService {
                     travelMinutes,
                     minRequired: rule.expectedMinMinutes,
                     earlyMinutes,
-                    subtype: 'MIN_TIME_VIOLATION'
+                    subtype: 'MIN_TIME_VIOLATION',
+                    object_owner: payload?.device?.object_owner || payload?.device?.owner || payload?.object_owner
                 });
             }
         }

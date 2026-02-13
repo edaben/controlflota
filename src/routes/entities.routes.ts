@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest, authorize, authenticate, tenantMiddleware } from '../middleware/auth.middleware';
 import { PERMISSIONS } from '../constants/permissions';
+import { generateRandomToken } from '../utils/auth';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -12,7 +13,8 @@ router.use(authenticate, tenantMiddleware);
 // --- Vehículos ---
 router.get('/vehicles', async (req: AuthRequest, res: Response) => {
     const vehicles = await prisma.vehicle.findMany({
-        where: { tenantId: req.user?.tenantId as string }
+        where: { tenantId: req.user?.tenantId as string },
+        orderBy: { plate: 'asc' }
     });
     // Frontend expects 'name', map it from 'internalCode'
     const response = vehicles.map(v => ({
@@ -23,55 +25,98 @@ router.get('/vehicles', async (req: AuthRequest, res: Response) => {
 });
 
 router.post('/vehicles', authorize([], [PERMISSIONS.MANAGE_VEHICLES]), async (req: AuthRequest, res: Response) => {
-    const { plate, traccarDeviceId, internalCode } = req.body;
+    const { plate, traccarDeviceId, internalCode, ownerName, ownerEmail, ownerPhone } = req.body;
     try {
         const vehicle = await prisma.vehicle.create({
             data: {
                 tenantId: req.user?.tenantId as string,
                 plate,
                 traccarDeviceId: traccarDeviceId ? parseInt(traccarDeviceId) : null,
-                internalCode
+                internalCode,
+                ownerName,
+                ownerEmail,
+                ownerPhone,
+                ownerToken: generateRandomToken()
             }
         });
         res.status(201).json(vehicle);
     } catch (error) {
+        console.error('Create vehicle error:', error);
         res.status(400).json({ error: 'Could not create vehicle' });
     }
 });
 
 router.put('/vehicles/:id', authorize([], [PERMISSIONS.MANAGE_VEHICLES]), async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
-    const { plate, traccarDeviceId, internalCode } = req.body;
+    const { plate, traccarDeviceId, internalCode, ownerName, ownerEmail, ownerPhone, regenerateToken } = req.body;
     try {
+        const data: any = {
+            plate,
+            traccarDeviceId: traccarDeviceId ? parseInt(traccarDeviceId) : null,
+            internalCode,
+            ownerName,
+            ownerEmail,
+            ownerPhone
+        };
+
+        if (regenerateToken) {
+            data.ownerToken = generateRandomToken();
+        }
+
         const vehicle = await prisma.vehicle.update({
             where: {
                 id,
                 tenantId: req.user?.tenantId as string
             },
-            data: {
-                plate,
-                traccarDeviceId: traccarDeviceId ? parseInt(traccarDeviceId) : null,
-                internalCode
-            }
+            data
         });
         res.json(vehicle);
     } catch (error) {
+        console.error('Update vehicle error:', error);
         res.status(400).json({ error: 'Could not update vehicle' });
     }
 });
 
 router.delete('/vehicles/:id', authorize([], [PERMISSIONS.MANAGE_VEHICLES]), async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
+    const tenantId = req.user?.tenantId as string;
     try {
-        await prisma.vehicle.delete({
-            where: {
-                id,
-                tenantId: req.user?.tenantId as string
-            }
-        });
+        await prisma.$transaction([
+            prisma.consolidatedReportItem.deleteMany({ where: { vehicleId: id } }),
+            prisma.ticket.deleteMany({ where: { fine: { infraction: { vehicleId: id } }, tenantId } }),
+            prisma.fine.deleteMany({ where: { infraction: { vehicleId: id }, tenantId } }),
+            prisma.infraction.deleteMany({ where: { vehicleId: id, tenantId } }),
+            prisma.stopArrival.deleteMany({ where: { vehicleId: id, tenantId } }),
+            prisma.vehicle.delete({
+                where: { id, tenantId }
+            })
+        ]);
         res.status(204).send();
     } catch (error) {
-        res.status(400).json({ error: 'Could not delete vehicle' });
+        console.error('Delete vehicle error:', error);
+        res.status(400).json({ error: 'Could not delete vehicle. It may have related records.' });
+    }
+});
+
+router.post('/vehicles/bulk-delete', authorize([], [PERMISSIONS.BULK_DELETE]), async (req: AuthRequest, res: Response) => {
+    const { ids } = req.body;
+    const tenantId = req.user?.tenantId as string;
+    if (!ids || !Array.isArray(ids)) return res.status(400).json({ error: 'Invalid IDs' });
+    try {
+        await prisma.$transaction([
+            prisma.consolidatedReportItem.deleteMany({ where: { vehicleId: { in: ids } } }),
+            prisma.ticket.deleteMany({ where: { fine: { infraction: { vehicleId: { in: ids } } }, tenantId } }),
+            prisma.fine.deleteMany({ where: { infraction: { vehicleId: { in: ids } }, tenantId } }),
+            prisma.infraction.deleteMany({ where: { vehicleId: { in: ids }, tenantId } }),
+            prisma.stopArrival.deleteMany({ where: { vehicleId: { in: ids }, tenantId } }),
+            prisma.vehicle.deleteMany({
+                where: { id: { in: ids }, tenantId }
+            })
+        ]);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Bulk delete vehicles error:', error);
+        res.status(400).json({ error: 'Could not delete vehicles' });
     }
 });
 
@@ -135,12 +180,13 @@ router.get('/users', async (req: AuthRequest, res: Response) => {
     try {
         const users = await prisma.user.findMany({
             where: { tenantId: req.user?.tenantId as string },
-            // include removed as it conflicts with select
             select: {
                 id: true,
                 email: true,
                 role: true,
                 permissions: true,
+                profileId: true,
+                profile: { select: { name: true } },
                 tenantId: true,
                 createdAt: true,
                 updatedAt: true,
@@ -154,7 +200,7 @@ router.get('/users', async (req: AuthRequest, res: Response) => {
 });
 
 router.post('/users', authorize([], [PERMISSIONS.MANAGE_USERS]), async (req: AuthRequest, res: Response) => {
-    const { email, password, role, permissions } = req.body;
+    const { email, password, role, permissions, profileId } = req.body;
     console.log('[POST /users] Attempting to create user:', { email, role, tenantId: req.user?.tenantId });
 
     try {
@@ -167,6 +213,7 @@ router.post('/users', authorize([], [PERMISSIONS.MANAGE_USERS]), async (req: Aut
                 password: hashedPassword,
                 role: role || 'CLIENT_USER',
                 permissions: permissions || [],
+                profileId: profileId || null,
                 tenantId: req.user?.tenantId as string
             },
             select: {
@@ -193,9 +240,9 @@ router.post('/users', authorize([], [PERMISSIONS.MANAGE_USERS]), async (req: Aut
 
 router.put('/users/:id', authorize([], [PERMISSIONS.MANAGE_USERS]), async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
-    const { email, password, role, permissions } = req.body;
+    const { email, password, role, permissions, profileId } = req.body;
     try {
-        const updateData: any = { email, role, permissions };
+        const updateData: any = { email, role, permissions, profileId: profileId || null };
 
         if (password) {
             const bcrypt = require('bcrypt');
@@ -329,6 +376,40 @@ router.get('/infractions', async (req: AuthRequest, res: Response) => {
     }
 });
 
+router.put('/infractions/:id', authorize([], [PERMISSIONS.MANAGE_INFRACTIONS]), async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const { status } = req.body;
+    try {
+        const infraction = await prisma.infraction.update({
+            where: { id, tenantId: req.user?.tenantId as string },
+            data: { status }
+        });
+        res.json(infraction);
+    } catch (error) {
+        res.status(400).json({ error: 'Could not update infraction status' });
+    }
+});
+
+router.post('/infractions/bulk-delete', authorize([], [PERMISSIONS.BULK_DELETE]), async (req: AuthRequest, res: Response) => {
+    const { ids } = req.body;
+    const tenantId = req.user?.tenantId as string;
+    if (!ids || !Array.isArray(ids)) return res.status(400).json({ error: 'Invalid IDs' });
+    try {
+        await prisma.$transaction([
+            prisma.consolidatedReportItem.deleteMany({ where: { infractionId: { in: ids } } }),
+            prisma.ticket.deleteMany({ where: { fine: { infractionId: { in: ids } }, tenantId } }),
+            prisma.fine.deleteMany({ where: { infractionId: { in: ids }, tenantId } }),
+            prisma.infraction.deleteMany({
+                where: { id: { in: ids }, tenantId }
+            })
+        ]);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Bulk delete infractions error:', error);
+        res.status(400).json({ error: 'Could not delete infractions' });
+    }
+});
+
 // --- Multas ---
 router.get('/fines', async (req: AuthRequest, res: Response) => {
     try {
@@ -344,6 +425,46 @@ router.get('/fines', async (req: AuthRequest, res: Response) => {
         res.json(fines);
     } catch (error) {
         res.status(500).json({ error: 'Could not fetch fines' });
+    }
+});
+
+router.put('/fines/:id', authorize([], [PERMISSIONS.MANAGE_FINES]), async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const { status } = req.body;
+    try {
+        const fine = await prisma.fine.update({
+            where: { id, tenantId: req.user?.tenantId as string },
+            data: { status }
+        });
+        res.json(fine);
+    } catch (error) {
+        res.status(400).json({ error: 'Could not update fine status' });
+    }
+});
+
+router.post('/fines/bulk-delete', authorize([], [PERMISSIONS.BULK_DELETE]), async (req: AuthRequest, res: Response) => {
+    const { ids } = req.body;
+    const tenantId = req.user?.tenantId as string;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: 'No IDs provided for deletion' });
+    }
+
+    try {
+        await prisma.$transaction([
+            prisma.consolidatedReportItem.deleteMany({ where: { fineId: { in: ids } } }),
+            prisma.ticket.deleteMany({ where: { fineId: { in: ids }, tenantId } }),
+            prisma.fine.deleteMany({
+                where: {
+                    id: { in: ids },
+                    tenantId
+                }
+            })
+        ]);
+        res.json({ success: true, message: `${ids.length} multas eliminadas correctamente.` });
+    } catch (error) {
+        console.error('Bulk delete fines error:', error);
+        res.status(500).json({ error: 'Error al eliminar las multas seleccionadas.' });
     }
 });
 
@@ -382,157 +503,6 @@ router.post('/fines/send-reminders', authorize([], [PERMISSIONS.MANAGE_FINES]), 
         res.json({ message: `Se han enviado ${pendingFines.length} recordatorios exitosamente.` });
     } catch (error) {
         res.status(500).json({ error: 'Error enviando recordatorios' });
-    }
-});
-
-// --- Reglas (Rules) ---
-// Segment Rules
-router.get('/segment-rules', async (req: AuthRequest, res: Response) => {
-    const rules = await prisma.segmentRule.findMany({
-        where: { tenantId: req.user?.tenantId as string },
-        include: { fromStop: true, toStop: true }
-    });
-    res.json(rules);
-});
-
-router.post('/segment-rules', authorize([], [PERMISSIONS.MANAGE_RULES]), async (req: AuthRequest, res: Response) => {
-    try {
-        const rule = await prisma.segmentRule.create({
-            data: { ...req.body, tenantId: req.user?.tenantId as string }
-        });
-        res.status(201).json(rule);
-    } catch (error) {
-        res.status(400).json({ error: 'Could not create segment rule' });
-    }
-});
-
-router.put('/segment-rules/:id', authorize([], [PERMISSIONS.MANAGE_RULES]), async (req: AuthRequest, res: Response) => {
-    const { id } = req.params;
-    try {
-        const rule = await prisma.segmentRule.update({
-            where: { id, tenantId: req.user?.tenantId as string },
-            data: req.body
-        });
-        res.json(rule);
-    } catch (error) {
-        res.status(400).json({ error: 'Could not update segment rule' });
-    }
-});
-
-router.delete('/segment-rules/:id', authorize([], [PERMISSIONS.MANAGE_RULES]), async (req: AuthRequest, res: Response) => {
-    const { id } = req.params;
-    try {
-        await prisma.segmentRule.delete({
-            where: { id, tenantId: req.user?.tenantId as string }
-        });
-        res.status(204).send();
-    } catch (error) {
-        res.status(400).json({ error: 'Could not delete segment rule' });
-    }
-});
-
-// Stop Rules
-router.get('/stop-rules', async (req: AuthRequest, res: Response) => {
-    const rules = await prisma.stopRule.findMany({
-        where: { tenantId: req.user?.tenantId as string },
-        include: { stop: true }
-    });
-    res.json(rules);
-});
-
-router.post('/stop-rules', authorize([], [PERMISSIONS.MANAGE_RULES]), async (req: AuthRequest, res: Response) => {
-    try {
-        const rule = await prisma.stopRule.create({
-            data: { ...req.body, tenantId: req.user?.tenantId as string }
-        });
-        res.status(201).json(rule);
-    } catch (error) {
-        res.status(400).json({ error: 'Could not create stop rule' });
-    }
-});
-
-router.put('/stop-rules/:id', authorize(['SUPER_ADMIN', 'CLIENT_ADMIN']), async (req: AuthRequest, res: Response) => {
-    const { id } = req.params;
-    try {
-        const rule = await prisma.stopRule.update({
-            where: { id, tenantId: req.user?.tenantId as string },
-            data: req.body
-        });
-        res.json(rule);
-    } catch (error) {
-        res.status(400).json({ error: 'Could not update stop rule' });
-    }
-});
-
-router.delete('/stop-rules/:id', authorize(['SUPER_ADMIN', 'CLIENT_ADMIN']), async (req: AuthRequest, res: Response) => {
-    const { id } = req.params;
-    try {
-        await prisma.stopRule.delete({
-            where: { id, tenantId: req.user?.tenantId as string }
-        });
-        res.status(204).send();
-    } catch (error) {
-        res.status(400).json({ error: 'Could not delete stop rule' });
-    }
-});
-
-// Speed Zones
-router.get('/speed-zones', async (req: AuthRequest, res: Response) => {
-    const zones = await prisma.speedZone.findMany({
-        where: { tenantId: req.user?.tenantId as string }
-    });
-    res.json(zones);
-});
-
-router.post('/speed-zones', authorize([], [PERMISSIONS.MANAGE_RULES]), async (req: AuthRequest, res: Response) => {
-    try {
-        const { name, routeId, stopId, geofenceId, traccarGeofenceId, maxSpeedKmh, fineAmountUsd, penaltyPerKmhUsd } = req.body;
-
-        // Sanitize: convert empty strings to null
-        const cleanId = (val: any) => (val && val.toString().trim() !== '') ? val.toString().trim() : null;
-
-        const zone = await prisma.speedZone.create({
-            data: {
-                tenantId: req.user?.tenantId as string,
-                name: name || 'Nueva Zona',
-                routeId: cleanId(routeId),
-                stopId: cleanId(stopId),
-                geofenceId: cleanId(traccarGeofenceId) || cleanId(geofenceId),
-                maxSpeedKmh: Number(maxSpeedKmh) || 0,
-                fineAmountUsd: Number(fineAmountUsd) || 0,
-                penaltyPerKmhUsd: Number(penaltyPerKmhUsd) || 0
-            }
-        });
-        console.log('[SpeedZones] ✅ Created zone:', zone.id, zone.name);
-        res.status(201).json(zone);
-    } catch (error: any) {
-        console.error('[SpeedZones] ❌ Error:', error.message);
-        res.status(400).json({ error: 'Could not create speed zone', details: error.message });
-    }
-});
-
-router.put('/speed-zones/:id', authorize(['SUPER_ADMIN', 'CLIENT_ADMIN']), async (req: AuthRequest, res: Response) => {
-    const { id } = req.params;
-    try {
-        const zone = await prisma.speedZone.update({
-            where: { id, tenantId: req.user?.tenantId as string },
-            data: req.body
-        });
-        res.json(zone);
-    } catch (error) {
-        res.status(400).json({ error: 'Could not update speed zone' });
-    }
-});
-
-router.delete('/speed-zones/:id', authorize(['SUPER_ADMIN', 'CLIENT_ADMIN']), async (req: AuthRequest, res: Response) => {
-    const { id } = req.params;
-    try {
-        await prisma.speedZone.delete({
-            where: { id, tenantId: req.user?.tenantId as string }
-        });
-        res.status(204).send();
-    } catch (error) {
-        res.status(400).json({ error: 'Could not delete speed zone' });
     }
 });
 

@@ -138,7 +138,7 @@ export class WebhookService {
                 });
 
                 // Disparar detección de dwell time (exceso en parada)
-                await InfractionService.detectDwellTimeInfraction(tenantId, vehicle.id, stop.id, dwellMinutes);
+                await InfractionService.detectDwellTimeInfraction(tenantId, vehicle.id, stop.id, dwellMinutes, payload);
             }
 
             // Detectar exceso de velocidad al salir
@@ -198,39 +198,72 @@ export class WebhookService {
         let stopLat = payload.latitude || null;
         let stopLng = payload.longitude || null;
 
-        const area = (geofence.area || '').trim();
-        console.log(`[Webhook] 🗺️ Parsing Geofence Geometry. Area: "${area}"`);
-
-        if (area.toUpperCase().startsWith('CIRCLE')) {
+        // 1. Intentar extraer de campos directos (formato JSON de algunas versiones)
+        if (geofence.radius) {
             geofenceType = 'circle';
-            // CIRCLE (longitude latitude, radius)
-            const contentMatch = area.match(/CIRCLE\s*\(([^)]+)\)/i);
-            if (contentMatch) {
-                const inner = contentMatch[1].trim();
-                const partsArr = inner.split(',');
-                if (partsArr.length >= 2) {
-                    const coords = partsArr[0].trim().split(/\s+/).map(Number);
-                    geofenceRadius = Number(partsArr[1].trim());
-                    if (coords.length >= 2) {
-                        stopLng = coords[0];
-                        stopLat = coords[1];
+            geofenceRadius = Number(geofence.radius);
+        }
+
+        if (geofence.coordinates) {
+            try {
+                // A veces viene como string JSON, otras como array
+                const coords = typeof geofence.coordinates === 'string'
+                    ? JSON.parse(geofence.coordinates)
+                    : geofence.coordinates;
+
+                if (Array.isArray(coords) && coords.length > 0) {
+                    geofenceType = 'polygon';
+                    geofenceCoordinates = coords.map((p: any) => ({
+                        lat: Number(p.lat),
+                        lng: Number(p.lng)
+                    }));
+                    // Usar el primer punto si no hay lat/lng base
+                    if (!stopLat) stopLat = geofenceCoordinates[0].lat;
+                    if (!stopLng) stopLng = geofenceCoordinates[0].lng;
+                }
+            } catch (e) {
+                console.error('[Webhook] ❌ Error parsing geofence coordinates:', e);
+            }
+        }
+
+        // 2. Fallback al formato WKT (area: "POLYGON..." o "CIRCLE...")
+        const area = (geofence.area || '').trim();
+        if (area && !geofenceType) {
+            console.log(`[Webhook] 🗺️ Parsing Geofence Geometry (WKT). Area: "${area}"`);
+
+            if (area.toUpperCase().startsWith('CIRCLE')) {
+                geofenceType = 'circle';
+                // CIRCLE (longitude latitude, radius)
+                const contentMatch = area.match(/CIRCLE\s*\(([^)]+)\)/i);
+                if (contentMatch) {
+                    const inner = contentMatch[1].trim();
+                    const partsArr = inner.split(',');
+                    if (partsArr.length >= 2) {
+                        const coords = partsArr[0].trim().split(/\s+/).map(Number);
+                        geofenceRadius = Number(partsArr[1].trim());
+                        if (coords.length >= 2) {
+                            stopLng = coords[0];
+                            stopLat = coords[1];
+                        }
                     }
                 }
-            }
-        } else if (area.toUpperCase().includes('POLYGON')) {
-            geofenceType = 'polygon';
-            // POLYGON ((lon lat, lon lat, ...))
-            const contentMatch = area.match(/POLYGON\s*\(\s*\(\s*([^)]+)\s*\)\s*\)/i) || area.match(/POLYGON\s*\(\s*([^)]+)\s*\)/i);
-            if (contentMatch) {
-                const points = contentMatch[1].split(',').map((p: string) => {
-                    const coords = p.trim().split(/\s+/).map(Number);
-                    return { lat: coords[1], lng: coords[0] }; // LON LAT -> LAT LNG
-                }).filter((p: any) => !isNaN(p.lat) && !isNaN(p.lng));
+            } else if (area.toUpperCase().includes('POLYGON')) {
+                geofenceType = 'polygon';
+                // POLYGON ((lon lat, lon lat, ...))
+                const contentMatch = area.match(/POLYGON\s*\(\s*\(\s*([^)]+)\s*\)\s*\)/i) || area.match(/POLYGON\s*\(\s*([^)]+)\s*\)/i);
+                if (contentMatch) {
+                    const points = contentMatch[1].split(',').map((p: string) => {
+                        const coords = p.trim().split(/\s+/).map(Number);
+                        return { lat: coords[1], lng: coords[0] }; // LON LAT -> LAT LNG
+                    }).filter((p: any) => !isNaN(p.lat) && !isNaN(p.lng));
 
-                if (points.length > 0) {
-                    geofenceCoordinates = points;
-                    stopLat = points[0].lat;
-                    stopLng = points[0].lng;
+                    if (points.length > 0) {
+                        geofenceCoordinates = points;
+                        if (!stopLat) {
+                            stopLat = points[0].lat;
+                            stopLng = points[0].lng;
+                        }
+                    }
                 }
             }
         }

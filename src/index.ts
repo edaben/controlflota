@@ -8,6 +8,8 @@ import entityRoutes from './routes/entities.routes';
 import ruleRoutes from './routes/rules.routes';
 import reportRoutes from './routes/reports.routes';
 import stopRoutes from './routes/stops.routes';
+import ownerRoutes from './routes/owner.routes';
+import profileRoutes from './routes/profiles.routes';
 import { SchedulerService } from './services/scheduler.service';
 
 dotenv.config();
@@ -24,13 +26,23 @@ app.use(cors({
 }));
 app.use(express.json());
 
+app.use((req, res, next) => {
+    console.log(`[DEBUG LOG] ${req.method} ${req.url}`);
+    if (['POST', 'PUT'].includes(req.method)) {
+        console.log(`[DEBUG BODY]`, JSON.stringify(req.body, null, 2));
+    }
+    next();
+});
+
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/webhook', webhookRoutes); // Mover antes para evitar interferencia de middleware en /api
+app.use('/api/webhook', webhookRoutes);
+app.use('/api/owner', ownerRoutes); // Move here: Public access via Magic Link
 app.use('/api', entityRoutes);
 app.use('/api', ruleRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api', stopRoutes);
+app.use('/api/profiles', profileRoutes);
 
 // Initialize Scheduler
 SchedulerService.init();

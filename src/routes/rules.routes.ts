@@ -1,11 +1,39 @@
 import { Router, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest, authenticate, tenantMiddleware } from '../middleware/auth.middleware';
+import fs from 'fs';
+import path from 'path';
 
 const router = Router();
 const prisma = new PrismaClient();
 
+console.log('✅ Rules routes module loaded');
+
+function logError(action: string, req: AuthRequest, error: any) {
+    const logPath = path.join(process.cwd(), 'rules-error.log');
+    const entry = `\n[${new Date().toISOString()}] ACTION: ${action}
+BODY: ${JSON.stringify(req.body, null, 2)}
+USER: ${JSON.stringify(req.user, null, 2)}
+ERROR: ${error.stack || error.message || error}
+------------------------------------------\n`;
+    fs.appendFileSync(logPath, entry);
+}
+
+const sanitizeInt = (val: any) => {
+    const p = parseInt(val);
+    return isNaN(p) ? undefined : p;
+};
+
+const sanitizeFloat = (val: any) => {
+    const p = parseFloat(val);
+    return isNaN(p) ? undefined : p;
+};
+
 router.use(authenticate, tenantMiddleware);
+
+router.get('/test-me', (req: AuthRequest, res: Response) => {
+    res.json({ message: 'Rules routes are working', user: req.user });
+});
 
 // --- Segment Rules (Tramo A -> B) ---
 router.get('/segment-rules', async (req: AuthRequest, res: Response) => {
@@ -17,38 +45,58 @@ router.get('/segment-rules', async (req: AuthRequest, res: Response) => {
 });
 
 router.post('/segment-rules', async (req: AuthRequest, res: Response) => {
-    const { routeId, fromStopId, toStopId, expectedMaxMinutes, fineAmountUsd } = req.body;
+    console.log('📥 POST /segment-rules received', req.body);
+    const fromStopId = (req.body.fromStopId || '').toString().trim();
+    const toStopId = (req.body.toStopId || '').toString().trim();
+    const routeId = (req.body.routeId || '').toString().trim();
+    const expectedMaxMinutes = parseInt(req.body.expectedMaxMinutes) || 30;
+    const fineAmountUsd = parseFloat(req.body.fineAmountUsd) || 0;
+    const penaltyPerMinuteUsd = parseFloat(req.body.penaltyPerMinuteUsd) || 0;
+
     try {
+        if (!fromStopId || !toStopId || !routeId) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios (Paradas o Ruta)' });
+        }
         const rule = await prisma.segmentRule.create({
             data: {
                 tenantId: req.user?.tenantId as string,
                 routeId,
                 fromStopId,
                 toStopId,
-                expectedMaxMinutes: Number(expectedMaxMinutes),
-                fineAmountUsd: Number(fineAmountUsd)
+                expectedMaxMinutes,
+                fineAmountUsd,
+                penaltyPerMinuteUsd
             }
         });
         res.status(201).json(rule);
     } catch (error) {
-        res.status(500).json({ error: 'Error creating segment rule' });
+        logError('CREATE_SEGMENT_RULE', req, error);
+        console.error('[Rules] ❌ Error creating segment rule:', error);
+        res.status(500).json({ error: 'Error creating segment rule', details: (error as any).message });
     }
 });
 
 router.put('/segment-rules/:id', async (req: AuthRequest, res: Response) => {
+    console.log('📥 PUT /segment-rules received', req.params.id, req.body);
     const { id } = req.params;
     const { expectedMaxMinutes, fineAmountUsd } = req.body;
     try {
         const rule = await prisma.segmentRule.update({
             where: { id },
             data: {
-                expectedMaxMinutes: Number(expectedMaxMinutes),
-                fineAmountUsd: Number(fineAmountUsd)
+                routeId: req.body.routeId || undefined,
+                fromStopId: req.body.fromStopId || undefined,
+                toStopId: req.body.toStopId || undefined,
+                expectedMaxMinutes: sanitizeInt(req.body.expectedMaxMinutes),
+                fineAmountUsd: sanitizeFloat(req.body.fineAmountUsd),
+                penaltyPerMinuteUsd: sanitizeFloat(req.body.penaltyPerMinuteUsd)
             }
         });
         res.json(rule);
     } catch (error) {
-        res.status(500).json({ error: 'Error updating segment rule' });
+        logError('UPDATE_SEGMENT_RULE', req, error);
+        console.error('[Rules] ❌ Error updating segment rule:', error);
+        res.status(500).json({ error: 'Error updating segment rule', details: (error as any).message });
     }
 });
 
@@ -72,36 +120,55 @@ router.get('/stop-rules', async (req: AuthRequest, res: Response) => {
 });
 
 router.post('/stop-rules', async (req: AuthRequest, res: Response) => {
-    const { stopId, maxDwellMinutes, fineAmountUsd } = req.body;
+    console.log('📥 POST /stop-rules received', req.body);
+    const stopId = (req.body.stopId || '').toString().trim();
+    const minDwellTimeMinutes = parseInt(req.body.minDwellTimeMinutes) || 0;
+    const maxDwellMinutes = parseInt(req.body.maxDwellMinutes) || 5;
+    const fineAmountUsd = parseFloat(req.body.fineAmountUsd) || 0;
+    const penaltyPerMinuteUsd = parseFloat(req.body.penaltyPerMinuteUsd) || 0;
+
     try {
+        if (!stopId) {
+            return res.status(400).json({ error: 'Falta campo obligatorio (Parada)' });
+        }
         const rule = await prisma.stopRule.create({
             data: {
                 tenantId: req.user?.tenantId as string,
                 stopId,
-                maxDwellMinutes: Number(maxDwellMinutes),
-                fineAmountUsd: Number(fineAmountUsd)
+                minDwellTimeMinutes,
+                maxDwellMinutes,
+                fineAmountUsd,
+                penaltyPerMinuteUsd
             }
         });
         res.status(201).json(rule);
     } catch (error) {
-        res.status(500).json({ error: 'Error creating stop rule' });
+        logError('CREATE_STOP_RULE', req, error);
+        console.error('[Rules] ❌ Error creating stop rule:', error);
+        res.status(500).json({ error: 'Error creating stop rule', details: (error as any).message });
     }
 });
 
 router.put('/stop-rules/:id', async (req: AuthRequest, res: Response) => {
+    console.log('📥 PUT /stop-rules received', req.params.id, req.body);
     const { id } = req.params;
     const { maxDwellMinutes, fineAmountUsd } = req.body;
     try {
         const rule = await prisma.stopRule.update({
             where: { id },
             data: {
-                maxDwellMinutes: Number(maxDwellMinutes),
-                fineAmountUsd: Number(fineAmountUsd)
+                stopId: req.body.stopId || undefined,
+                minDwellTimeMinutes: sanitizeInt(req.body.minDwellTimeMinutes),
+                maxDwellMinutes: sanitizeInt(req.body.maxDwellMinutes),
+                fineAmountUsd: sanitizeFloat(req.body.fineAmountUsd),
+                penaltyPerMinuteUsd: sanitizeFloat(req.body.penaltyPerMinuteUsd)
             }
         });
         res.json(rule);
     } catch (error) {
-        res.status(500).json({ error: 'Error updating stop rule' });
+        logError('UPDATE_STOP_RULE', req, error);
+        console.error('[Rules] ❌ Error updating stop rule:', error);
+        res.status(500).json({ error: 'Error updating stop rule', details: (error as any).message });
     }
 });
 

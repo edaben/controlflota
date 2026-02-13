@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import api from '@/lib/api';
-import { Truck, Plus, MapPin, Edit, Trash2 } from 'lucide-react';
+import { Truck, Plus, MapPin, Edit, Trash2, CheckSquare, Square } from 'lucide-react';
 import Modal from '@/components/Modal';
 
 interface Vehicle {
@@ -14,6 +14,10 @@ interface Vehicle {
     routeId?: string;
     active?: boolean;
     route?: { name: string };
+    ownerName?: string;
+    ownerEmail?: string;
+    ownerPhone?: string;
+    ownerToken?: string;
 }
 
 import { PERMISSIONS } from '@/constants/permissions';
@@ -24,12 +28,17 @@ export default function VehiclesPage() {
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [isDeleting, setIsDeleting] = useState(false);
     const [formData, setFormData] = useState({
         licensePlate: '',
         name: '',
         model: '',
         traccarDeviceId: '',
-        active: true
+        active: true,
+        ownerName: '',
+        ownerEmail: '',
+        ownerPhone: ''
     });
 
     const [user, setUser] = useState<any>(null);
@@ -66,7 +75,10 @@ export default function VehiclesPage() {
                 name: vehicle.name || '',
                 model: vehicle.model || '',
                 traccarDeviceId: vehicle.traccarDeviceId?.toString() || '',
-                active: vehicle.active || true
+                active: vehicle.active || true,
+                ownerName: vehicle.ownerName || '',
+                ownerEmail: vehicle.ownerEmail || '',
+                ownerPhone: vehicle.ownerPhone || ''
             });
         } else {
             setEditingVehicle(null);
@@ -75,7 +87,10 @@ export default function VehiclesPage() {
                 name: '',
                 model: '',
                 traccarDeviceId: '',
-                active: true
+                active: true,
+                ownerName: '',
+                ownerEmail: '',
+                ownerPhone: ''
             });
         }
         setIsModalOpen(true);
@@ -89,18 +104,20 @@ export default function VehiclesPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
+            const payload = {
+                plate: formData.licensePlate,
+                traccarDeviceId: formData.traccarDeviceId || null,
+                ownerName: formData.ownerName,
+                ownerEmail: formData.ownerEmail,
+                ownerPhone: formData.ownerPhone
+            };
+
             if (editingVehicle) {
                 // Update
-                await api.put(`/vehicles/${editingVehicle.id}`, {
-                    plate: formData.licensePlate,
-                    traccarDeviceId: formData.traccarDeviceId || null
-                });
+                await api.put(`/vehicles/${editingVehicle.id}`, payload);
             } else {
                 // Create
-                await api.post('/vehicles', {
-                    plate: formData.licensePlate,
-                    traccarDeviceId: formData.traccarDeviceId || null
-                });
+                await api.post('/vehicles', payload);
             }
             handleCloseModal();
             fetchVehicles();
@@ -121,6 +138,40 @@ export default function VehiclesPage() {
         }
     };
 
+    const handleToggleSelectAll = () => {
+        if (!hasPermission(user, PERMISSIONS.BULK_DELETE)) return;
+        if (selectedIds.length === vehicles.length) {
+            setSelectedIds([]);
+        } else {
+            setSelectedIds(vehicles.map(v => v.id));
+        }
+    };
+
+    const handleToggleSelect = (id: string) => {
+        if (!hasPermission(user, PERMISSIONS.BULK_DELETE)) return;
+        setSelectedIds(prev =>
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+        );
+    };
+
+    const handleDeleteSelected = async () => {
+        if (!confirm(`¿Estás seguro de que deseas eliminar los ${selectedIds.length} vehículos seleccionados? Esta acción no se puede deshacer.`)) {
+            return;
+        }
+
+        setIsDeleting(true);
+        try {
+            await api.post('/vehicles/bulk-delete', { ids: selectedIds });
+            setVehicles(prev => prev.filter(v => !selectedIds.includes(v.id)));
+            setSelectedIds([]);
+        } catch (error) {
+            console.error('Error deleting vehicles:', error);
+            alert('Error al eliminar los vehículos seleccionados.');
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
     return (
         <div className="space-y-8">
             <div className="flex justify-between items-center">
@@ -128,24 +179,48 @@ export default function VehiclesPage() {
                     <h1 className="text-3xl font-bold text-white mb-2">Gestión de Vehículos</h1>
                     <p className="text-slate-400">Control de flota y asignación de rutas</p>
                 </div>
-                {hasPermission(user, PERMISSIONS.MANAGE_VEHICLES) && (
-                    <button
-                        onClick={() => handleOpenModal()}
-                        className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-emerald-900/20"
-                    >
-                        <Plus size={20} />
-                        Agregar Vehículo
-                    </button>
-                )}
+                <div className="flex gap-3">
+                    {selectedIds.length > 0 && hasPermission(user, PERMISSIONS.BULK_DELETE) && (
+                        <button
+                            onClick={handleDeleteSelected}
+                            disabled={isDeleting}
+                            className="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-red-500/20"
+                        >
+                            <Trash2 size={20} className={isDeleting ? 'animate-pulse' : ''} />
+                            Eliminar ({selectedIds.length})
+                        </button>
+                    )}
+                    {hasPermission(user, PERMISSIONS.MANAGE_VEHICLES) && (
+                        <button
+                            onClick={() => handleOpenModal()}
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-emerald-900/20"
+                        >
+                            <Plus size={20} />
+                            Agregar Vehículo
+                        </button>
+                    )}
+                </div>
             </div>
 
             <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
                 <table className="w-full text-left">
                     <thead>
                         <tr className="bg-slate-800/50 text-slate-400 text-sm">
+                            <th className="px-6 py-4 font-medium w-10 text-center">
+                                <button
+                                    onClick={handleToggleSelectAll}
+                                    disabled={!hasPermission(user, PERMISSIONS.BULK_DELETE)}
+                                    className={`text-slate-500 hover:text-primary-400 transition-colors ${!hasPermission(user, PERMISSIONS.BULK_DELETE) ? 'opacity-30 cursor-not-allowed' : ''}`}
+                                >
+                                    {selectedIds.length === vehicles.length && vehicles.length > 0 ? (
+                                        <CheckSquare size={18} className="text-primary-400" />
+                                    ) : (
+                                        <Square size={18} />
+                                    )}
+                                </button>
+                            </th>
                             <th className="px-6 py-4 font-medium">Vehículo</th>
                             <th className="px-6 py-4 font-medium">Placa</th>
-                            <th className="px-6 py-4 font-medium">Device ID</th>
                             <th className="px-6 py-4 font-medium">Ruta</th>
                             <th className="px-6 py-4 font-medium">Estado</th>
                             <th className="px-6 py-4 font-medium text-right">Acciones</th>
@@ -153,7 +228,23 @@ export default function VehiclesPage() {
                     </thead>
                     <tbody className="divide-y divide-slate-800">
                         {vehicles.map((v) => (
-                            <tr key={v.id} className="hover:bg-slate-800/30 transition-colors">
+                            <tr
+                                key={v.id}
+                                className={`hover:bg-slate-800/30 transition-colors ${selectedIds.includes(v.id) ? 'bg-primary-500/5' : ''}`}
+                            >
+                                <td className="px-6 py-4 text-center">
+                                    <button
+                                        onClick={() => handleToggleSelect(v.id)}
+                                        disabled={!hasPermission(user, PERMISSIONS.BULK_DELETE)}
+                                        className={`text-slate-500 hover:text-primary-400 transition-colors ${!hasPermission(user, PERMISSIONS.BULK_DELETE) ? 'opacity-30 cursor-not-allowed' : ''}`}
+                                    >
+                                        {selectedIds.includes(v.id) ? (
+                                            <CheckSquare size={18} className="text-primary-400" />
+                                        ) : (
+                                            <Square size={18} />
+                                        )}
+                                    </button>
+                                </td>
                                 <td className="px-6 py-4">
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400">
@@ -167,9 +258,6 @@ export default function VehiclesPage() {
                                 </td>
                                 <td className="px-6 py-4">
                                     <span className="text-slate-300 font-mono text-sm">{v.plate || 'N/A'}</span>
-                                </td>
-                                <td className="px-6 py-4 text-slate-400 text-sm">
-                                    {v.traccarDeviceId || 'No asignado'}
                                 </td>
                                 <td className="px-6 py-4">
                                     <div className="flex items-center gap-2 text-slate-300">
@@ -246,6 +334,77 @@ export default function VehiclesPage() {
                         />
                         <p className="text-xs text-slate-500 mt-1">ID del dispositivo en Traccar</p>
                     </div>
+
+                    <div className="pt-4 border-t border-slate-800">
+                        <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Información del Propietario</p>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">
+                                    Nombre del Dueño
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formData.ownerName}
+                                    onChange={(e) => setFormData({ ...formData, ownerName: e.target.value })}
+                                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                                    placeholder="Juan Pérez"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                                        Email
+                                    </label>
+                                    <input
+                                        type="email"
+                                        value={formData.ownerEmail}
+                                        onChange={(e) => setFormData({ ...formData, ownerEmail: e.target.value })}
+                                        className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                                        placeholder="juan@ejemplo.com"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                                        WhatsApp / Teléfono
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formData.ownerPhone}
+                                        onChange={(e) => setFormData({ ...formData, ownerPhone: e.target.value })}
+                                        className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                                        placeholder="+593 99 999 9999"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {editingVehicle?.ownerToken && (
+                        <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl">
+                            <p className="text-xs text-emerald-400 font-bold uppercase mb-2">Acceso Directo Propietario (Link Mágico)</p>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="text"
+                                    readOnly
+                                    value={`${window.location.origin}/owner/${editingVehicle.ownerToken}`}
+                                    className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(`${window.location.origin}/owner/${editingVehicle.ownerToken}`);
+                                        alert('Link copiado al portapapeles');
+                                    }}
+                                    className="bg-emerald-600 hover:bg-emerald-500 text-white p-1.5 rounded transition-colors"
+                                >
+                                    <CheckSquare size={14} />
+                                </button>
+                            </div>
+                            <p className="text-[10px] text-slate-500 mt-2">Cualquier persona con este link podrá ver la data de este vehículo sin contraseña.</p>
+                        </div>
+                    )}
 
                     <div className="flex gap-3 pt-4">
                         <button

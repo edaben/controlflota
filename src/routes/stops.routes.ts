@@ -73,7 +73,7 @@ router.put('/stops/:id', authorize([], [PERMISSIONS.MANAGE_ROUTES]), async (req:
     }
 });
 
-router.delete('/stops/:id', authorize([], [PERMISSIONS.MANAGE_ROUTES]), async (req: AuthRequest, res: Response) => {
+router.delete('/stops/:id', authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const tenantId = req.user?.tenantId as string;
 
@@ -109,6 +109,59 @@ router.delete('/stops/:id', authorize([], [PERMISSIONS.MANAGE_ROUTES]), async (r
     } catch (error) {
         console.error('Error deleting stop:', error);
         res.status(500).json({ error: 'Could not delete stop. It might be referenced by other records.' });
+    }
+});
+
+router.post('/stops/bulk-delete', authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
+    const { ids } = req.body;
+    const tenantId = req.user?.tenantId as string;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: 'IDs must be a non-empty array' });
+    }
+
+    try {
+        await prisma.$transaction(async (tx: any) => {
+            // 1. Delete SegmentRules
+            await tx.segmentRule.deleteMany({
+                where: {
+                    tenantId,
+                    OR: [
+                        { fromStopId: { in: ids } },
+                        { toStopId: { in: ids } }
+                    ]
+                }
+            });
+
+            // 2. Delete StopRules
+            await tx.stopRule.deleteMany({
+                where: {
+                    tenantId,
+                    stopId: { in: ids }
+                }
+            });
+
+            // 3. Delete StopArrivals
+            await tx.stopArrival.deleteMany({
+                where: {
+                    tenantId,
+                    stopId: { in: ids }
+                }
+            });
+
+            // 4. Delete Stops
+            await tx.stop.deleteMany({
+                where: {
+                    id: { in: ids },
+                    tenantId
+                }
+            });
+        });
+
+        res.status(204).send();
+    } catch (error) {
+        console.error('Error in bulk delete stops:', error);
+        res.status(500).json({ error: 'Could not perform bulk delete' });
     }
 });
 

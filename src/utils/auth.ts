@@ -23,3 +23,7 @@ export const verifyToken = (token: string): any => {
         return null;
     }
 };
+
+export const generateRandomToken = (length: number = 32): string => {
+    return require('crypto').randomBytes(length).toString('hex');
+};

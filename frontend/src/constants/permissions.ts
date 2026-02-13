@@ -31,6 +31,12 @@ export const PERMISSIONS = {
     // Multi-tenant (Super Admin only usually)
     VIEW_TENANTS: 'view:tenants',
     MANAGE_TENANTS: 'manage:tenants',
+
+    // Raw Data / Developer Logs
+    VIEW_RAW_DATA: 'view:raw_data',
+
+    // Extra Actions
+    BULK_DELETE: 'manage:bulk_delete',
 } as const;
 
 export type Permission = typeof PERMISSIONS[keyof typeof PERMISSIONS];
@@ -54,6 +60,8 @@ export const PERMISSION_LABELS: Record<Permission, { label: string, category: st
     [PERMISSIONS.MANAGE_SETTINGS]: { label: 'Configuración de Sistema', category: 'Admin' },
     [PERMISSIONS.VIEW_TENANTS]: { label: 'Ver Tenants (Super)', category: 'Super Admin' },
     [PERMISSIONS.MANAGE_TENANTS]: { label: 'Gestionar Tenants (Super)', category: 'Super Admin' },
+    [PERMISSIONS.VIEW_RAW_DATA]: { label: 'Ver Datos Crudos (Logs)', category: 'Super Admin' },
+    [PERMISSIONS.BULK_DELETE]: { label: 'Eliminación Masiva (Checks)', category: 'Seguridad' },
 };
 
 export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {

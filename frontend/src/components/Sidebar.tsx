@@ -12,13 +12,20 @@ import {
     User,
     Building2,
     Webhook,
-    MapPin
+    MapPin,
+    Shield,
+    X
 } from 'lucide-react';
 
 import { PERMISSIONS } from '../constants/permissions';
 import { hasPermission } from '../utils/permissions';
 
-const Sidebar = () => {
+interface SidebarProps {
+    isOpen?: boolean;
+    onClose?: () => void;
+}
+
+const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     const pathname = usePathname();
     const router = useRouter();
     const [user, setUser] = React.useState<any>(null);
@@ -39,6 +46,7 @@ const Sidebar = () => {
         { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', permission: PERMISSIONS.VIEW_DASHBOARD },
         { href: '/tenants', icon: Building2, label: 'Clientes', permission: PERMISSIONS.VIEW_TENANTS },
         { href: '/users', icon: User, label: 'Usuarios', permission: PERMISSIONS.VIEW_USERS },
+        { href: '/profiles', icon: Shield, label: 'Perfiles', permission: PERMISSIONS.MANAGE_USERS },
         { href: '/infractions', icon: AlertTriangle, label: 'Infracciones', permission: PERMISSIONS.VIEW_INFRACTIONS },
         { href: '/fines', icon: FileText, label: 'Multas', permission: PERMISSIONS.VIEW_FINES },
         { href: '/consolidated', icon: Mail, label: 'Consolidados', permission: PERMISSIONS.VIEW_REPORTS },
@@ -61,42 +69,63 @@ const Sidebar = () => {
     };
 
     return (
-        <aside className="w-64 bg-slate-900 text-white min-h-screen flex flex-col border-r border-slate-800">
-            <div className="p-6">
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
-                    Control Bus
-                </h1>
-            </div>
+        <>
+            {/* Mobile Overlay */}
+            {isOpen && (
+                <div
+                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+                    onClick={onClose}
+                />
+            )}
 
-            <nav className="flex-1 px-4 space-y-2">
-                {filteredNavItems.map((item) => {
-                    const isActive = pathname === item.href;
-                    return (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${isActive
-                                ? 'bg-primary-600 text-white shadow-lg shadow-primary-900/40'
-                                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                                }`}
-                        >
-                            <item.icon size={20} />
-                            <span className="font-medium">{item.label}</span>
-                        </Link>
-                    );
-                })}
-            </nav>
+            <aside className={`
+                fixed lg:static inset-y-0 left-0 z-50
+                w-64 bg-slate-900 text-white min-h-screen flex flex-col border-r border-slate-800
+                transform transition-transform duration-300 ease-in-out
+                ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+            `}>
+                <div className="p-6 flex items-center justify-between">
+                    <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
+                        Control Bus
+                    </h1>
+                    {onClose && (
+                        <button onClick={onClose} className="lg:hidden text-slate-400 hover:text-white">
+                            <X size={20} />
+                        </button>
+                    )}
+                </div>
 
-            <div className="p-4 border-t border-slate-800">
-                <button
-                    onClick={handleLogout}
-                    className="flex items-center space-x-3 px-4 py-3 w-full text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
-                >
-                    <LogOut size={20} />
-                    <span className="font-medium">Cerrar Sesión</span>
-                </button>
-            </div>
-        </aside>
+                <nav className="flex-1 px-4 space-y-1 overflow-y-auto custom-scrollbar">
+                    {filteredNavItems.map((item) => {
+                        const isActive = pathname === item.href;
+                        return (
+                            <Link
+                                key={item.href}
+                                href={item.href}
+                                onClick={onClose}
+                                className={`flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200 ${isActive
+                                    ? 'bg-primary-600 text-white shadow-lg shadow-primary-900/40'
+                                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                                    }`}
+                            >
+                                <item.icon size={18} />
+                                <span className="font-medium text-sm">{item.label}</span>
+                            </Link>
+                        );
+                    })}
+                </nav>
+
+                <div className="p-4 border-t border-slate-800">
+                    <button
+                        onClick={handleLogout}
+                        className="flex items-center space-x-3 px-4 py-2.5 w-full text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
+                    >
+                        <LogOut size={18} />
+                        <span className="font-medium text-sm">Cerrar Sesión</span>
+                    </button>
+                </div>
+            </aside>
+        </>
     );
 };
 

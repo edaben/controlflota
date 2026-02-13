@@ -63,9 +63,9 @@ router.post('/traccar', async (req: Request, res: Response) => {
 });
 
 // Endpoint para ver logs (protegido si se quisiera, pero por ahora público para debug o usar middleware)
-import { authenticate, AuthRequest } from '../middleware/auth.middleware';
+import { authenticate, AuthRequest, authorize } from '../middleware/auth.middleware';
 
-router.get('/logs', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/logs', authenticate, authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
     try {
         const tenant = await prisma.tenant.findUnique({
             where: { id: req.user?.tenantId as string },
@@ -119,7 +119,7 @@ router.get('/logs', authenticate, async (req: AuthRequest, res: Response) => {
     }
 });
 
-router.delete('/logs', authenticate, async (req: AuthRequest, res: Response) => {
+router.delete('/logs', authenticate, authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
     try {
         const tenantId = req.user?.tenantId as string;
 

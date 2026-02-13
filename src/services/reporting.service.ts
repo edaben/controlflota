@@ -61,7 +61,11 @@ export class ReportingService {
             where: { id: reportId },
             include: {
                 tenant: true,
-                items: true
+                items: {
+                    include: {
+                        vehicle: true
+                    }
+                }
             }
         });
 
@@ -96,7 +100,8 @@ export class ReportingService {
         doc.moveDown(0.5);
 
         report.items.forEach((item: any, index: number) => {
-            doc.fontSize(10).text(`${index + 1}. Multa: $${item.amountUsd.toFixed(2)} - Infracción ID: ${item.infractionId}`);
+            const vehicleInfo = item.vehicle ? `[${item.vehicle.plate}] ${item.vehicle.ownerName || ''}` : `ID: ${item.vehicleId}`;
+            doc.fontSize(10).text(`${index + 1}. ${vehicleInfo} - Multa: $${item.amountUsd.toFixed(2)}`);
         });
 
         doc.end();

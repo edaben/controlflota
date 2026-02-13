@@ -9,6 +9,7 @@ export interface AuthRequest extends Request {
         role: string;
         tenantId?: string | null;
         permissions?: string[];
+        profileId?: string | null;
     };
 }
 
@@ -49,18 +50,17 @@ export const authorize = (roles: string[] = [], requiredPermissions: Permission[
         const hasRole = roles.length === 0 || roles.includes(req.user.role);
 
         // 3. Verificar Permisos
-        // Si el usuario tiene permisos específicos asignados, estos son la única fuente de verdad.
-        // Si no tiene ninguno (array vacío o nulo), usamos los del rol (backward compatibility). 
-        let effectivePermissions: string[] = [];
+        // Nota: req.user.permissions ya incluye los permisos del perfil (mezclados en el login)
+        const effectivePermissions = req.user.permissions || [];
+        const roleDefaultPermissions = DEFAULT_ROLE_PERMISSIONS[req.user.role] || [];
 
-        if (req.user.permissions && req.user.permissions.length > 0) {
-            effectivePermissions = req.user.permissions;
-        } else {
-            effectivePermissions = DEFAULT_ROLE_PERMISSIONS[req.user.role] || [];
-        }
+        // Si no tiene permisos específicos, usamos los del rol
+        const finalPermissions = effectivePermissions.length > 0
+            ? effectivePermissions
+            : roleDefaultPermissions;
 
         const hasPermissions = requiredPermissions.length === 0 ||
-            requiredPermissions.every(p => effectivePermissions.includes(p));
+            requiredPermissions.every(p => finalPermissions.includes(p));
 
         if (hasRole && hasPermissions) {
             return next();

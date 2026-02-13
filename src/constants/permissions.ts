@@ -34,6 +34,9 @@ export const PERMISSIONS = {
     // Multi-tenant (Super Admin only usually)
     VIEW_TENANTS: 'view:tenants',
     MANAGE_TENANTS: 'manage:tenants',
+
+    // Extra Actions
+    BULK_DELETE: 'manage:bulk_delete',
 } as const;
 
 export type Permission = typeof PERMISSIONS[keyof typeof PERMISSIONS];
