@@ -1,82 +1,70 @@
-# Sistema Control Bus - Multas e Infracciones USD
+# Control Bus - Sistema de Gestión de Infracciones y Flotas
 
-Sistema multi-tenant de gestión de infracciones diseñado para procesar alertas de Traccar y automatizar el cobro de multas.
+Sistema integral multi-tenant diseñado para la supervisión de transporte público y privado, integrando datos en tiempo real de **Traccar** para la detección automática de infracciones y gestión de multas.
 
 ## 🚀 Características Principales
 
-- **Multi-Tenant:** Aislamiento total de datos por cliente (tenant).
-- **Infracciones Automáticas:**
-  - Exceso de velocidad (Overspeed).
-  - Incumplimiento de tiempo en tramo (A -> B).
-  - Exceso de tiempo en parada (Dwell time).
-- **Multas en USD:** Configuración de montos por regla.
-- **Reportes Consolidados:** Envío programado (diario/semanal) para evitar spam de correos.
-- **Scheduler Interno:** Automatización de envíos y generación de PDFs.
-- **Panel Premium:** Dashboard moderno basado en **Next.js 14 App Router** + TailwindCSS.
+### 🏢 Arquitectura Multi-Tenant
+- Aislamiento total de datos por empresa (Tenant).
+- Configuración personalizada de SMTP e identidad por cada cliente.
+
+### ⚖️ Motor de Reglas e Infracciones
+- **Exceso de Velocidad**: Por zona específica o global.
+- **Tiempos de Tramo**: Control detallado de tiempo entre geocercas (Parada A -> Parada B).
+- **Permanencia en Parada (Dwell Time)**: Detección de tiempos mínimos y máximos en puntos clave.
+- **Multas en USD**: Generación automática de montos base y penalizaciones por minuto/kmh de exceso.
+
+### 👤 Gestión Avanzada de Permisos
+- **Sistema de Perfiles**: Crea perfiles personalizados (ej. Operador, Contador) con permisos granulares.
+- **Control de Borrado Masivo**: Restricción específica para la eliminación de múltiples registros.
+- **Herencia de Roles**: Mezcla inteligente de permisos manuales y por perfil.
+
+### 📱 Interfaz Premium y Responsiva
+- **Next.js 14 App Router**: Una experiencia de usuario ultra rápida y fluida.
+- **Diseño Mobile-First**: Panel totalmente funcional en celulares y tablets.
+- **Mapa en Tiempo Real**: Visualización de rutas y geocercas mediante Leaflet.
+
+### 📧 Automatización y Notificaciones
+- **Portal de Propietario (Magic Link)**: Acceso seguro para dueños de vehículos sin necesidad de cuenta.
+- **Reportes Consolidados**: Resúmenes automáticos por email para evitar saturación.
+- **Generación de PDFs**: Tickets de multas y reportes descargables al instante.
 
 ## 🛠️ Stack Tecnológico
 
-- **Backend:** Node.js, TypeScript, Express, Prisma ORM, PostgreSQL.
-- **Frontend:** **Next.js 14 (App Router)**, React 18, TailwindCSS, Lucide Icons.
-- **Infraestructura:** Docker, Docker Compose.
-- **Automatización:** Node-cron (Scheduler), Nodemailer (SMTP), PDFKit.
+- **Frontend**: React 18, Next.js 14, TailwindCSS, Lucide Icons, Framer Motion.
+- **Backend**: Node.js, Express, TypeScript.
+- **Base de Datos**: PostgreSQL + Prisma ORM.
+- **Procesamiento**: Node-cron para tareas en segundo plano.
 
-## 📦 Instalación
+## 📦 Guía de Instalación Rápida
 
-### Opción 1: Con Docker (Recomendado)
+### Requisitos
+- Docker y Docker Compose instalados.
+- Un servidor Traccar activo para enviar webhooks.
 
-1. **Clonar el repositorio:**
+### Pasos
+1. **Configuración Inicial**:
    ```bash
-   git clone <url-del-repo>
-   cd control-bus
+   cp .env.example .env
+   # Edita .env con tus credenciales de Postgres y Token de Traccar
    ```
 
-2. **Configurar variables de entorno:**
-   Copia el archivo `.env.example` a `.env` y completa los datos de tu base de datos y SMTP.
-
-3. **Levantar con Docker:**
+2. **Despliegue con Docker**:
    ```bash
    docker-compose up -d --build
    ```
 
-4. **Ejecutar migraciones de base de datos:**
+3. **Base de Datos**:
    ```bash
-   docker-compose exec backend npm run prisma:migrate
+   docker-compose exec backend npx prisma db push
    ```
 
-5. **Acceder a la aplicación:**
-   - Frontend: http://localhost:3001
-   - Backend API: http://localhost:3000
+## 📂 Estructura del Proyecto
 
-### Opción 2: Desarrollo Local
-
-1. **Backend:**
-   ```bash
-   npm install
-   npm run prisma:generate
-   npm run prisma:migrate
-   npm run dev
-   ```
-
-2. **Frontend:**
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
-
-## 🚨 Recuperación ante Desastre (Disaster Recovery)
-
-En caso de fallo total del servidor:
-
-1. **Nueva Instancia:** Provisionar un nuevo servidor con Docker e instalar Git.
-2. **Repositorio:** Clonar el repositorio en la nueva instancia.
-3. **Backup de DB:** Si cuentas con un backup de PostgreSQL (`.sql`), restáuralo:
-   ```bash
-   cat backup.sql | docker exec -i control-bus-db psql -U postgres -d control_bus
-   ```
-4. **Archivos PDF:** Los tickets y reportes generados se encuentran en el volumen persistente o carpeta `uploads/`. Asegúrate de restaurar esta carpeta si es crítica.
-5. **Configuración:** Asegúrate de que el `.env` tenga las mismas claves (`JWT_SECRET`) para que los tokens antiguos no expiren (opcional).
+- `/src`: Backend API y servicios de lógica.
+- `/frontend`: Aplicación Next.js.
+- `/prisma`: Esquema y migraciones de la base de datos.
+- `/scripts`: Herramientas de utilidad para mantenimiento (backups, reseteo de claves).
 
 ## 📄 Licencia
-Este proyecto es propiedad privada de Control Bus.
+Propiedad de Control Bus. Todos los derechos reservados.

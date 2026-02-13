@@ -27,6 +27,44 @@ export class SchedulerService {
                 console.log(`✅ Respaldo programado completado.`);
             });
         });
+
+        // 🧹 Tarea de Limpieza de Datos (Cada medianoche)
+        cron.schedule('0 0 * * *', async () => {
+            console.log('🧹 Iniciando limpieza automática de datos antiguos...');
+            await this.runDataCleanup();
+        });
+    }
+
+    static async runDataCleanup() {
+        const retentionDays = parseInt(process.env.DATA_RETENTION_DAYS || '90');
+        const fineRetentionDays = parseInt(process.env.FINE_RETENTION_DAYS || '180');
+
+        const eventCutoff = new Date();
+        eventCutoff.setDate(eventCutoff.getDate() - retentionDays);
+
+        const fineCutoff = new Date();
+        fineCutoff.setDate(fineCutoff.getDate() - fineRetentionDays);
+
+        try {
+            // 1. Limpiar Eventos de GPS (Los más pesados)
+            const deletedEvents = await prisma.gpsEvent.deleteMany({
+                where: { createdAt: { lt: eventCutoff } }
+            });
+
+            // 2. Limpiar Infracciones antiguas
+            const deletedInfractions = await prisma.infraction.deleteMany({
+                where: { createdAt: { lt: eventCutoff } }
+            });
+
+            // 3. Limpiar Multas antiguas (se conservan más tiempo)
+            const deletedFines = await prisma.fine.deleteMany({
+                where: { createdAt: { lt: fineCutoff } }
+            });
+
+            console.log(`✅ Limpieza completada: ${deletedEvents.count} eventos, ${deletedInfractions.count} infracciones, ${deletedFines.count} multas eliminadas.`);
+        } catch (error) {
+            console.error('❌ Error durante la limpieza automática de datos:', error);
+        }
     }
 
     static async processScheduledReports() {

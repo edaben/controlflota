@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import api from '@/lib/api';
-import { Truck, Plus, MapPin, Edit, Trash2, CheckSquare, Square } from 'lucide-react';
+import { Truck, Plus, MapPin, Edit, Trash2, CheckSquare, Square, Eye, ExternalLink, Copy } from 'lucide-react';
 import Modal from '@/components/Modal';
 
 interface Vehicle {
@@ -273,10 +273,10 @@ export default function VehiclesPage() {
                                     <td className="px-6 py-4 text-right space-x-2">
                                         <button
                                             onClick={() => handleOpenModal(v)}
-                                            className="text-primary-400 hover:text-primary-300 text-sm font-medium inline-flex items-center gap-1"
+                                            className="bg-slate-800 hover:bg-slate-700 text-primary-400 px-3 py-1.5 rounded-lg text-sm font-medium inline-flex items-center gap-2 border border-slate-700 transition-all"
                                         >
-                                            <Edit size={14} />
-                                            Editar
+                                            <Eye size={16} />
+                                            Ver detalles
                                         </button>
                                         <button
                                             onClick={() => handleDelete(v.id)}
@@ -382,14 +382,25 @@ export default function VehiclesPage() {
                     </div>
 
                     {editingVehicle?.ownerToken && (
-                        <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl">
-                            <p className="text-xs text-emerald-400 font-bold uppercase mb-2">Acceso Directo Propietario (Link Mágico)</p>
+                        <div className="bg-primary-500/10 border border-primary-500/20 p-5 rounded-2xl space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-primary-400">
+                                    <ExternalLink size={18} />
+                                    <span className="text-xs font-bold uppercase tracking-wider">Acceso Directo (Magic Link)</span>
+                                </div>
+                                <span className="bg-primary-500/20 text-primary-400 px-2 py-0.5 rounded text-[10px] font-bold">ACTIVO</span>
+                            </div>
+
+                            <p className="text-sm text-slate-400 leading-relaxed">
+                                Este enlace permite al propietario ver la ubicación y datos del vehículo sin necesidad de usuario ni contraseña.
+                            </p>
+
                             <div className="flex items-center gap-2">
                                 <input
                                     type="text"
                                     readOnly
                                     value={`${window.location.origin}/owner/${editingVehicle.ownerToken}`}
-                                    className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300"
+                                    className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 font-mono"
                                 />
                                 <button
                                     type="button"
@@ -397,12 +408,12 @@ export default function VehiclesPage() {
                                         navigator.clipboard.writeText(`${window.location.origin}/owner/${editingVehicle.ownerToken}`);
                                         alert('Link copiado al portapapeles');
                                     }}
-                                    className="bg-emerald-600 hover:bg-emerald-500 text-white p-1.5 rounded transition-colors"
+                                    className="bg-primary-600 hover:bg-primary-500 text-white p-2.5 rounded-xl transition-all shadow-lg shadow-primary-900/40"
+                                    title="Copiar Link"
                                 >
-                                    <CheckSquare size={14} />
+                                    <Copy size={16} />
                                 </button>
                             </div>
-                            <p className="text-[10px] text-slate-500 mt-2">Cualquier persona con este link podrá ver la data de este vehículo sin contraseña.</p>
                         </div>
                     )}
 

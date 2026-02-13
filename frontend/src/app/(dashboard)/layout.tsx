@@ -12,6 +12,7 @@ export default function DashboardLayout({
 }) {
     const router = useRouter();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(false);
 
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -32,9 +33,14 @@ export default function DashboardLayout({
                 </button>
             </div>
 
-            <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+            <Sidebar
+                isOpen={isSidebarOpen}
+                onClose={() => setIsSidebarOpen(false)}
+                isCollapsed={isCollapsed}
+                onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
+            />
 
-            <main className="flex-1 lg:p-8 p-4 pt-16 lg:pt-8 overflow-y-auto">
+            <main className={`flex-1 transition-all duration-300 ${isCollapsed ? 'lg:pl-20' : 'lg:pl-64'} lg:p-8 p-4 pt-16 lg:pt-8 overflow-y-auto`}>
                 <div className="max-w-7xl mx-auto">
                     {children}
                 </div>

@@ -23,31 +23,26 @@ services:
     ports:
       - "4000:3000"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/control_bus
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@db:5432/control_bus}
       JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       PORT: 3000
+      NODE_ENV: production
     depends_on:
       - db
     networks:
       - control-bus-network
     volumes:
-      - ./src:/app/src
-      - ./prisma:/app/prisma
-      - ./scripts:/app/scripts
-      - ./tsconfig.json:/app/tsconfig.json
+      - ./uploads:/app/uploads
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=/api
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-/api}
     container_name: control-bus-frontend
-    # No exponemos el puerto directo al mundo, pasamos por nginx
-    # ports:
-    #   - "4001:3000"
     environment:
-      NEXT_PUBLIC_API_URL: /api
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api}
     depends_on:
       - backend
     networks:
@@ -57,9 +52,12 @@ services:
     image: nginx:alpine
     container_name: control-bus-nginx
     ports:
+      - "80:80"
+      - "443:443"
       - "8081:80"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./uploads:/usr/share/nginx/html/uploads:ro
     depends_on:
       - frontend
       - backend

@@ -49,11 +49,9 @@ fi
 
 case $TARGET in
     backend)
-        echo -e "${GREEN}⚡ Reiniciando solo backend (sin rebuild ~5 segundos)...${NC}"
-        # Backend has volume mounts for src/, so just restart to pick up compiled changes
-        # But we need to rebuild if package.json or prisma changed
-        docker compose restart backend
-        echo -e "${GREEN}✅ Backend reiniciado!${NC}"
+        echo -e "${GREEN}⚡ Reconstruyendo backend...${NC}"
+        docker compose up -d --build backend
+        echo -e "${GREEN}✅ Backend actualizado!${NC}"
         ;;
     
     frontend)
@@ -63,20 +61,15 @@ case $TARGET in
         ;;
     
     all)
-        echo -e "${YELLOW}🔨 Actualizando todo...${NC}"
-        # Backend: just restart (volumes handle code sync)
-        docker compose restart backend
-        # Frontend: needs rebuild
-        docker compose up -d --build frontend
+        echo -e "${YELLOW}🔨 Construyendo y actualizando todo...${NC}"
+        docker compose up -d --build
         echo -e "${GREEN}✅ Todo actualizado!${NC}"
         ;;
     
     quick)
         # Ultra-fast: just restart everything, no rebuild at all
         echo -e "${GREEN}⚡ Restart rápido de todos los servicios (~5 seg)...${NC}"
-        docker compose restart backend
-        docker compose restart frontend
-        docker compose restart nginx
+        docker compose restart
         echo -e "${GREEN}✅ Todos los servicios reiniciados!${NC}"
         ;;
     

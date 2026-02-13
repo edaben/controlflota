@@ -4,6 +4,9 @@ import './globals.css'
 export const metadata: Metadata = {
     title: 'Control Bus - Sistema de Infracciones',
     description: 'Sistema multi-tenant de gestión de infracciones y multas',
+    icons: {
+        icon: '/favicon.png',
+    },
 }
 
 export default function RootLayout({

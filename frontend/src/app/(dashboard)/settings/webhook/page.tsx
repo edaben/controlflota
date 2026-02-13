@@ -31,9 +31,9 @@ export default function SettingsPage() {
                 console.error('Error parsing user', e);
             }
         }
-        // Get webhook URL from environment or backend
-        const baseUrl = window.location.origin.replace('3001', '3000');
-        setWebhookUrl(`${baseUrl}/api/webhook/traccar`);
+        // Get webhook URL from environment or fallback to window origin
+        const apiBase = process.env.NEXT_PUBLIC_API_URL || `${window.location.origin.replace('3001', '3000')}/api`;
+        setWebhookUrl(`${apiBase}/webhook/traccar`);
 
         fetchWebhookLogs();
     }, []);
@@ -45,8 +45,8 @@ export default function SettingsPage() {
             setStats(data.stats || { total: 0, today: 0, errors: 0 });
 
             if (data.apiKey) {
-                const baseUrl = window.location.origin.replace('3001', '3000');
-                setWebhookUrl(`${baseUrl}/api/webhook/traccar?apiKey=${data.apiKey}`);
+                const apiBase = process.env.NEXT_PUBLIC_API_URL || `${window.location.origin.replace('3001', '3000')}/api`;
+                setWebhookUrl(`${apiBase}/webhook/traccar?apiKey=${data.apiKey}`);
             }
         } catch (err) {
             console.error(err);
