@@ -28,11 +28,13 @@ WORKDIR /app
 ENV NODE_ENV production
 
 # We copy everything to ensure 'next start' has all it needs
-COPY --from=builder /app ./
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
 
 EXPOSE 3000
 
 ENV PORT 3000
 ENV HOSTNAME "0.0.0.0"
 
-CMD ["npm", "run", "start"]
+CMD ["node", "server.js"]
