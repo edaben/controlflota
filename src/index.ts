@@ -14,6 +14,12 @@ import { SchedulerService } from './services/scheduler.service';
 
 dotenv.config();
 
+console.log('--- BACKEND STARTUP DIAGNOSTICS ---');
+console.log('PORT:', process.env.PORT);
+console.log('DATABASE_URL present:', !!process.env.DATABASE_URL);
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('------------------------------------');
+
 const app = express();
 const prisma = new PrismaClient();
 const port = process.env.PORT || 3000;
@@ -26,8 +32,14 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Global error handler
+app.use((err: any, req: Request, res: Response, next: any) => {
+    console.error('💥 GLOBAL ERROR:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+});
+
 app.use((req, res, next) => {
-    console.log(`[DEBUG LOG] ${req.method} ${req.url}`);
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
     if (['POST', 'PUT'].includes(req.method)) {
         console.log(`[DEBUG BODY]`, JSON.stringify(req.body, null, 2));
     }
