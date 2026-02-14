@@ -180,8 +180,8 @@ router.get('/users', async (req: AuthRequest, res: Response) => {
     try {
         const where: any = {};
 
-        // Si no es SUPER_ADMIN, o si es SUPER_ADMIN pero tiene un tenantId asignado, filtramos
-        if (req.user?.role !== 'SUPER_ADMIN' || req.user?.tenantId) {
+        // Solo filtramos por tenantId si NO es SUPER_ADMIN
+        if (req.user?.role !== 'SUPER_ADMIN') {
             where.tenantId = req.user?.tenantId as string;
         }
 
