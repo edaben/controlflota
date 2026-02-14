@@ -57,7 +57,7 @@ export class ReportingService {
      * Genera un PDF consolidado para un periodo
      */
     static async generateConsolidatedPDF(reportId: string): Promise<string> {
-        const report: any = await prisma.consolidatedReport.findUnique({
+        const report = await prisma.consolidatedReport.findUnique({
             where: { id: reportId },
             include: {
                 tenant: true,

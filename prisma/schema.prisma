@@ -105,6 +105,7 @@ model Vehicle {
   tenant           Tenant   @relation(fields: [tenantId], references: [id])
   stopArrivals     StopArrival[]
   infractions      Infraction[]
+  consolidatedReportItems ConsolidatedReportItem[]
 
   @@unique([tenantId, plate])
   @@map("vehicles")
@@ -267,6 +268,7 @@ model Infraction {
   tenant  Tenant @relation(fields: [tenantId], references: [id])
   vehicle Vehicle @relation(fields: [vehicleId], references: [id])
   fine    Fine?
+  consolidatedReportItems ConsolidatedReportItem[]
 
   @@map("infractions")
 }
@@ -282,6 +284,7 @@ model Fine {
   tenant     Tenant     @relation(fields: [tenantId], references: [id])
   infraction Infraction @relation(fields: [infractionId], references: [id])
   ticket     Ticket?
+  consolidatedReportItems ConsolidatedReportItem[]
 
   @@map("fines")
 }
