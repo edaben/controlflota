@@ -178,8 +178,15 @@ router.delete('/routes/:id', authorize([], [PERMISSIONS.MANAGE_ROUTES]), async (
 // --- Users ---
 router.get('/users', async (req: AuthRequest, res: Response) => {
     try {
+        const where: any = {};
+
+        // Si no es SUPER_ADMIN, o si es SUPER_ADMIN pero tiene un tenantId asignado, filtramos
+        if (req.user?.role !== 'SUPER_ADMIN' || req.user?.tenantId) {
+            where.tenantId = req.user?.tenantId as string;
+        }
+
         const users = await prisma.user.findMany({
-            where: { tenantId: req.user?.tenantId as string },
+            where,
             select: {
                 id: true,
                 email: true,
