@@ -362,7 +362,10 @@ model ConsolidatedReportItem {
   fineId               String
   amountUsd            Decimal @db.Decimal(10, 2)
 
-  report ConsolidatedReport @relation(fields: [consolidatedReportId], references: [id])
+  report     ConsolidatedReport @relation(fields: [consolidatedReportId], references: [id])
+  vehicle    Vehicle            @relation(fields: [vehicleId], references: [id])
+  infraction Infraction         @relation(fields: [infractionId], references: [id])
+  fine       Fine               @relation(fields: [fineId], references: [id])
 
   @@map("consolidated_report_items")
 }
