@@ -14,12 +14,6 @@ import { SchedulerService } from './services/scheduler.service';
 
 dotenv.config();
 
-console.log('--- BACKEND STARTUP DIAGNOSTICS ---');
-console.log('PORT:', process.env.PORT);
-console.log('DATABASE_URL present:', !!process.env.DATABASE_URL);
-console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('------------------------------------');
-
 const app = express();
 const prisma = new PrismaClient();
 const port = process.env.PORT || 3000;
